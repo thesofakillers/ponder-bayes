@@ -44,7 +44,7 @@ sh gen_pip_reqs.sh
     │   ├── processed/     <- The final, canonical data sets for modeling.
     │   └── raw/           <- The original, immutable data dump.
     ├── models/            <- Trained and serialized models.
-    ├── notebooks/          <- Jupyter notebooks.
+    ├── notebooks/         <- Jupyter notebooks.
     ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
     ├── pyproject.toml     <- project metadata, handled by poetry.
     ├── poetry.lock        <- resolving and locking dependencies, handled by poetry.
