@@ -64,3 +64,7 @@ This is purposely opinionated so that paths align over collaborators without
 having to edit config files. Users may find the
 [cookiecutter data-science opinions page](http://drivendata.github.io/cookiecutter-data-science/#opinions),
 of relevance
+
+The top level `data/` and `models/` directory are in version control only to
+show structure. Their contents will not be committed and are ignored via
+`.gitignore`.
