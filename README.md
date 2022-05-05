@@ -56,7 +56,7 @@ sh gen_pip_reqs.sh
         ├── models/        <- Model definitions
         ├── run/           <- scripts to train, evaluate and use models
         ├── utils.py       <- miscellaneous utils
-        └── visualization/  <- Scripts for visualization
+        └── visualization/ <- Scripts for visualization
 ```
 
 The project structure is largely based on the
