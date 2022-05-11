@@ -11,4 +11,4 @@ python3 train.py \
 		--lambda-p 0.4 \
 		--n-elems 4 \
         --seed $SEED \
-		results/experiment_a/$SEED
+		results/$SEED
