@@ -50,7 +50,7 @@ sh gen_pip_reqs.sh
     ├── poetry.lock        <- resolving and locking dependencies, handled by poetry.
     ├── requirements.txt   <- for non-poetry users.
     ├── gen_pip_reqs.sh    <- for generating the pip requirements.txt file
-    └── src/               <- Source code for use in this project.
+    └── ponderbayes/       <- Source code for use in this project.
         ├── __init__.py    <- Makes src a Python module
         ├── data/          <- Scripts to download or generate data
         ├── models/        <- Model definitions
