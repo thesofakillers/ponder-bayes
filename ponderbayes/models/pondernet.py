@@ -1,3 +1,7 @@
+"""
+Credit for PonderNet, ReconstructionLoss and RegularizationLoss largely to
+https://github.com/jankrepl/mildlyoverfitted/tree/master/github_adventures/pondernet
+"""
 import torch
 import torch.nn as nn
 
@@ -35,9 +39,7 @@ class PonderNet(nn.Module):
 
     """
 
-    def __init__(
-        self, n_elems, n_hidden=64, max_steps=20, allow_halting=False
-    ):
+    def __init__(self, n_elems, n_hidden=64, max_steps=20, allow_halting=False):
         super().__init__()
 
         self.max_steps = max_steps
@@ -95,18 +97,14 @@ class PonderNet(nn.Module):
             if n == self.max_steps:
                 lambda_n = x.new_ones(batch_size)  # (batch_size,)
             else:
-                lambda_n = torch.sigmoid(self.lambda_layer(h))[
-                    :, 0
-                ]  # (batch_size,)
+                lambda_n = torch.sigmoid(self.lambda_layer(h))[:, 0]  # (batch_size,)
 
             # Store releavant outputs
             y_list.append(self.output_layer(h)[:, 0])  # (batch_size,)
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
 
             halting_step = torch.maximum(
-                n
-                * (halting_step == 0)
-                * torch.bernoulli(lambda_n).to(torch.long),
+                n * (halting_step == 0) * torch.bernoulli(lambda_n).to(torch.long),
                 halting_step,
             )
 
@@ -164,9 +162,7 @@ class ReconstructionLoss(nn.Module):
         total_loss = p.new_tensor(0.0)
 
         for n in range(max_steps):
-            loss_per_sample = p[n] * self.loss_func(
-                y_pred[n], y_true
-            )  # (batch_size,)
+            loss_per_sample = p[n] * self.loss_func(y_pred[n], y_true)  # (batch_size,)
             total_loss = total_loss + loss_per_sample.mean()  # (1,)
 
         return total_loss
@@ -216,8 +212,6 @@ class RegularizationLoss(nn.Module):
 
         p = p.transpose(0, 1)  # (batch_size, max_steps)
 
-        p_g_batch = self.p_g[None, :steps].expand_as(
-            p
-        )  # (batch_size, max_steps)
+        p_g_batch = self.p_g[None, :steps].expand_as(p)  # (batch_size, max_steps)
 
         return self.kl_div(p.log(), p_g_batch)
