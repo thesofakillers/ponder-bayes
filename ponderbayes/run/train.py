@@ -9,12 +9,12 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from models.pondernet import (
+from ponderbayes.models.pondernet import (
     PonderNet,
     ReconstructionLoss,
     RegularizationLoss,
 )
-from data.datasets import ParityDataset
+from ponderbayes.data.datasets import ParityDataset
 
 
 @torch.no_grad()
@@ -59,10 +59,7 @@ def evaluate(dataloader, module):
         y_true_batch = y_true_batch.to(device, dtype)  # (batch_size,)
 
         y_pred_batch, p, halting_step = module(x_batch)
-        y_halted_batch = y_pred_batch.gather(
-            dim=0,
-            index=halting_step[None, :] - 1,
-        )[
+        y_halted_batch = y_pred_batch.gather(dim=0, index=halting_step[None, :] - 1,)[
             0
         ]  # (batch_size,)
 
@@ -72,15 +69,11 @@ def evaluate(dataloader, module):
         )
 
         metrics_single_["accuracy_halted"].append(accuracy_halted)
-        metrics_single_["halting_step"].append(
-            halting_step.to(torch.float).mean()
-        )
+        metrics_single_["halting_step"].append(halting_step.to(torch.float).mean())
 
         # Computing per step metrics (mean over samples in the batch)
         accuracy = (
-            ((y_pred_batch > 0) == y_true_batch[None, :])
-            .to(torch.float32)
-            .mean(dim=1)
+            ((y_pred_batch > 0) == y_true_batch[None, :]).to(torch.float32).mean(dim=1)
         )
 
         metrics_per_step_["accuracy"].append(accuracy)
@@ -324,9 +317,9 @@ def main(argv=None):
     module = module.to(device, dtype)
 
     # Loss preparation
-    loss_rec_inst = ReconstructionLoss(
-        nn.BCEWithLogitsLoss(reduction="none")
-    ).to(device, dtype)
+    loss_rec_inst = ReconstructionLoss(nn.BCEWithLogitsLoss(reduction="none")).to(
+        device, dtype
+    )
 
     loss_reg_inst = RegularizationLoss(
         lambda_p=args.lambda_p,
@@ -382,14 +375,10 @@ def main(argv=None):
                     loss_reg_inst.p_g.cpu().numpy(),
                     metrics_per_step["p"],
                 )
-                writer.add_figure(
-                    f"distributions/{dataloader_name}", fig_dist, step
-                )
+                writer.add_figure(f"distributions/{dataloader_name}", fig_dist, step)
 
                 fig_acc = plot_accuracy(metrics_per_step["accuracy"])
-                writer.add_figure(
-                    f"accuracy_per_step/{dataloader_name}", fig_acc, step
-                )
+                writer.add_figure(f"accuracy_per_step/{dataloader_name}", fig_acc, step)
 
                 for metric_name, metric_value in metrics_single.items():
                     writer.add_scalar(
