@@ -15,7 +15,8 @@ tensorboard = "^2.9.0"
 pyro-ppl = "^1.8.1"
 pip = ">=21.3"
 ipywidgets = "^7.7.0"
-blitz-bayesian-pytorch = "^0.2.8"
+torchmetrics = "^0.8.2"
+wandb = "^0.12.16"
 
 [tool.poetry.dev-dependencies]
 jupyterlab = "^3.4.0"
