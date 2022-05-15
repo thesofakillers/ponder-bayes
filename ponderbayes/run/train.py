@@ -9,11 +9,12 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from ponderbayes.models.pondernet import (
+from ponderbayes.models.ponderbayes import (
     PonderNet,
     ReconstructionLoss,
     RegularizationLoss,
 )
+
 from ponderbayes.data.datasets import ParityDataset
 
 
@@ -269,7 +270,6 @@ def main(argv=None):
         ParityDataset(
             n_samples=args.batch_size * args.n_iter,
             n_elems=args.n_elems,
-            seed=args.seed,
             n_nonzero_min=args.n_nonzero[0],
             n_nonzero_max=args.n_nonzero[1],
         ),
@@ -280,7 +280,6 @@ def main(argv=None):
             ParityDataset(
                 n_samples=n_eval_samples,
                 n_elems=args.n_elems,
-                seed=args.seed,
                 n_nonzero_min=args.n_nonzero[0],
                 n_nonzero_max=args.n_nonzero[1],
             ),
@@ -290,7 +289,6 @@ def main(argv=None):
             ParityDataset(
                 n_samples=n_eval_samples,
                 n_elems=args.n_elems,
-                seed=args.seed,
                 n_nonzero_min=range_nonzero_easy[0],
                 n_nonzero_max=range_nonzero_easy[1],
             ),
@@ -300,7 +298,6 @@ def main(argv=None):
             ParityDataset(
                 n_samples=n_eval_samples,
                 n_elems=args.n_elems,
-                seed=args.seed,
                 n_nonzero_min=range_nonzero_hard[0],
                 n_nonzero_max=range_nonzero_hard[1],
             ),
