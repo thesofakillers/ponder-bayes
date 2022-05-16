@@ -100,13 +100,17 @@ if __name__ == "__main__":
 
     # trainer config and instantiation
     ckpt_cb = pl.callbacks.ModelCheckpoint(
-        save_top_k=1, monitor="val-accuracy_halted_step", mode="max"
+        save_top_k=1, monitor="val/accuracy_halted_step", mode="max"
+    )
+    logger = pl.loggers.TensorBoardLogger(
+        save_dir="models", name=f"{args.model}_{args.mode}"
     )
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
         enable_progress_bar=args.progress_bar,
         callbacks=[ckpt_cb],
+        logger=logger,
     )
 
     # for reproducibility
