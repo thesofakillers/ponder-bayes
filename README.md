@@ -45,7 +45,8 @@ sh gen_pip_reqs.sh
     │   └── raw/           <- The original, immutable data dump.
     ├── models/            <- Trained and serialized models.
     ├── notebooks/         <- Jupyter notebooks.
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
+    ├── reports/           <- Generated analysis as HTML, PDF, LaTeX, etc.
+    ├── lisa/              <- LISA (slurm compute) scripts, jobs, config.
     ├── pyproject.toml     <- project metadata, handled by poetry.
     ├── poetry.lock        <- resolving and locking dependencies, handled by poetry.
     ├── requirements.txt   <- for non-poetry users.

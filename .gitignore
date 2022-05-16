@@ -1,6 +1,10 @@
 # user defined
 ./data/
 ./models/
+# lisa job outputs
+*.out
+# checkpoints
+*.ckpt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
