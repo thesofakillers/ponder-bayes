@@ -13,7 +13,7 @@ module purge
 module load 2021
 module load Anaconda3/2021.05
 
-source activate bert-infoshare
+source activate ponderbayes
 
 srun python -u ponderbayes/run/train.py --model pondernet \
   --mode interpolation
