@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 import json
 import pathlib
+from pickletools import optimize
 
 import matplotlib.pyplot as plt
 import torch
@@ -8,6 +9,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from pyro.infer.autoguide import AutoDiagonalNormal
+import pyro
+from pyro.infer import SVI, Trace_ELBO
+import pyro.poutine as poutine
 
 from ponderbayes.models.ponderbayes import (
     PonderNet,
@@ -91,6 +96,33 @@ def evaluate(dataloader, module):
     }
 
     return metrics_single, metrics_per_step
+
+
+def custom_loss(model, guide, *args, **kwargs):
+    guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
+    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args, **kwargs)
+
+    elbo = 0.0
+    y, p, halting_step = model_trace.nodes['_RETURN']['value']
+
+    print(model_trace.nodes)
+
+    count = 0
+    for site in model_trace.nodes.values():
+        if site["type"] == "sample" and 'obs' in site["name"]:
+            score = site['fn'].log_prob(site['value']) * p[count]
+            elbo += score.mean()
+            count += 1
+
+    count = 0
+    for site in guide_trace.nodes.values():
+        if site["type"] == "sample" and 'obs' in site["name"]:
+            score = site['fn'].log_prob(site['value']) * p[count]
+            elbo -= score.mean()
+            count += 1
+    
+    return -elbo 
+
 
 
 def plot_distributions(target, predicted):
@@ -306,17 +338,13 @@ def main(argv=None):
     }
 
     # Model preparation
-    module = PonderNet(
+    model = PonderNet(
         n_elems=args.n_elems,
         n_hidden=args.n_hidden,
         max_steps=args.max_steps,
     )
-    module = module.to(device, dtype)
-
-    # Loss preparation
-    loss_rec_inst = ReconstructionLoss(nn.BCEWithLogitsLoss(reduction="none")).to(
-        device, dtype
-    )
+    guide = AutoDiagonalNormal(model)
+    # module = module.to(device, dtype)
 
     loss_reg_inst = RegularizationLoss(
         lambda_p=args.lambda_p,
@@ -324,55 +352,39 @@ def main(argv=None):
     ).to(device, dtype)
 
     # Optimizer
-    optimizer = torch.optim.Adam(
-        module.parameters(),
-        lr=0.0003,
-    )
+    adam = pyro.optim.Adam({"lr": 0.03})
+    # loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
+
+    # Loss preparation
+    # loss_rec_inst = ReconstructionLoss(loss_fn).to(
+    #     device, dtype
+    # )
+    svi = SVI(model, guide, adam, loss=custom_loss)
 
     # Training and evaluation loops
+    pyro.clear_param_store()
     iterator = tqdm(enumerate(dataloader_train), total=args.n_iter)
     for step, (x_batch, y_true_batch) in iterator:
         x_batch = x_batch.to(device, dtype)
         y_true_batch = y_true_batch.to(device, dtype)
 
-        y_pred_batch, p, halting_step = module(x_batch)
+        loss = svi.step(x_batch, y_true_batch)
+        print(loss)
 
-        loss_rec = loss_rec_inst(
-            p,
-            y_pred_batch,
-            y_true_batch,
-        )
-
-        loss_reg = loss_reg_inst(
-            p,
-        )
-
-        loss_overall = loss_rec + args.beta * loss_reg
-
-        optimizer.zero_grad()
-        loss_overall.backward()
-        torch.nn.utils.clip_grad_norm_(module.parameters(), 1)
-        optimizer.step()
-
-        # Logging
-        writer.add_scalar("loss_rec", loss_rec, step)
-        writer.add_scalar("loss_reg", loss_reg, step)
-        writer.add_scalar("loss_overall", loss_overall, step)
-
-        # Evaluation
+        # # Evaluation
         if step % args.eval_frequency == 0:
-            module.eval()
+            model.eval()
 
             for dataloader_name, dataloader in eval_dataloaders.items():
                 metrics_single, metrics_per_step = evaluate(
                     dataloader,
-                    module,
+                    model,
                 )
-                fig_dist = plot_distributions(
-                    loss_reg_inst.p_g.cpu().numpy(),
-                    metrics_per_step["p"],
-                )
-                writer.add_figure(f"distributions/{dataloader_name}", fig_dist, step)
+                # fig_dist = plot_distributions(
+                #     loss_reg_inst.p_g.cpu().numpy(),
+                #     metrics_per_step["p"],
+                # )
+                # writer.add_figure(f"distributions/{dataloader_name}", fig_dist, step)
 
                 fig_acc = plot_accuracy(metrics_per_step["accuracy"])
                 writer.add_figure(f"accuracy_per_step/{dataloader_name}", fig_acc, step)
@@ -384,9 +396,9 @@ def main(argv=None):
                         step,
                     )
 
-            torch.save(module, log_folder / "checkpoint.pth")
+            torch.save(model, log_folder / "checkpoint.pth")
 
-            module.train()
+            model.train()
 
 
 if __name__ == "__main__":

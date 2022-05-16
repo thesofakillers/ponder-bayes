@@ -15,7 +15,7 @@ from pyro.infer.autoguide import AutoNormal
 from pyro.optim import Adam
 
 
-class PonderNet(nn.Module):
+class PonderNet(PyroModule):
     """Network that ponders.
 
     Parameters
@@ -56,10 +56,12 @@ class PonderNet(nn.Module):
         self.allow_halting = allow_halting
 
         self.cell = PyroModule[nn.GRUCell](n_elems, n_hidden)
-        self.output_layer = nn.Linear(n_hidden, 1)
-        self.lambda_layer = nn.Linear(n_hidden, 1)
+        self.output_layer = PyroModule[nn.Linear](n_hidden, 1)
+        self.lambda_layer = PyroModule[nn.Linear](n_hidden, 1)
+        self.output_layer.weight = PyroSample(dist.Normal(torch.Tensor([0.]), torch.Tensor([1.])).expand([1, n_hidden]).to_event(2))
+        self.output_layer.bias = PyroSample(dist.Normal(0., 1).expand([1]).to_event(1))
 
-    def forward(self, x):
+    def forward(self, x, y_true=None):
         """Run forward pass.
 
         Parameters
@@ -112,6 +114,8 @@ class PonderNet(nn.Module):
             y_list.append(self.output_layer(h)[:, 0])  # (batch_size,)
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
 
+            # print(lambda_n)
+
             halting_step = torch.maximum(
                 n * (halting_step == 0) * torch.bernoulli(lambda_n).to(torch.long),
                 halting_step,
@@ -124,9 +128,15 @@ class PonderNet(nn.Module):
             # Potentially stop if all samples halted
             if self.allow_halting and (halting_step > 0).sum() == batch_size:
                 break
-
+        
         y = torch.stack(y_list)
         p = torch.stack(p_list)
+
+        for n in range(20):
+            sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0., 1.))
+            mean = y[n]
+            with pyro.plate(f"data_{n}", x.shape[0]):
+                obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)
 
         return y, p, halting_step
 
@@ -147,7 +157,7 @@ class ReconstructionLoss(nn.Module):
 
         self.loss_func = loss_func
 
-    def forward(self, p, y_pred, y_true):
+    def forward(self, p, x_batch, y_true, model, guide):
         """Compute loss.
 
         Parameters
@@ -171,7 +181,7 @@ class ReconstructionLoss(nn.Module):
         total_loss = p.new_tensor(0.0)
 
         for n in range(max_steps):
-            loss_per_sample = p[n] * self.loss_func(y_pred[n], y_true)  # (batch_size,)
+            loss_per_sample = p[n] * self.loss_func(x_batch, y_true)  # (batch_size,)
             total_loss = total_loss + loss_per_sample.mean()  # (1,)
 
         return total_loss
