@@ -21,81 +21,28 @@ from ponderbayes.models.ponderbayes import (
 )
 
 from ponderbayes.data.datasets import ParityDataset
+from pyro.infer import Predictive
+
 
 
 @torch.no_grad()
-def evaluate(dataloader, module):
-    """Compute relevant metrics.
+def evaluate(model, guide, dataloader):
+    def summary(samples):
+        site_stats = {}
+        for k, v in samples.items():
+            site_stats[k] = {
+                "mean": torch.mean(v, 0),
+            }
+        return site_stats
 
-    Parameters
-    ----------
-    dataloader : DataLoader
-        Dataloader that yields batches of `x` and `y`.
+    predictive = Predictive(model, guide=guide, num_samples=1,
+                            return_sites=("linear.weight", "obs", "_RETURN"))
 
-    module : PonderNet
-        Our pondering network.
-
-    Returns
-    -------
-    metrics_single : dict
-        Scalar metrics. The keys are names and the values are `torch.Tensor`.
-        These metrics are computed as mean values over the entire dataset.
-
-    metrics_per_step : dict
-        Per step metrics. The keys are names and the values are `torch.Tensor`
-        of shape `(max_steps,)`. These metrics are computed as mean values over
-        the entire dataset.
-
-    """
-    # Imply device and dtype
-    param = next(module.parameters())
-    device, dtype = param.device, param.dtype
-
-    metrics_single_ = {
-        "accuracy_halted": [],
-        "halting_step": [],
-    }
-    metrics_per_step_ = {
-        "accuracy": [],
-        "p": [],
-    }
-
+    
     for x_batch, y_true_batch in dataloader:
-        x_batch = x_batch.to(device, dtype)  # (batch_size, n_elems)
-        y_true_batch = y_true_batch.to(device, dtype)  # (batch_size,)
-
-        y_pred_batch, p, halting_step = module(x_batch)
-        y_halted_batch = y_pred_batch.gather(dim=0, index=halting_step[None, :] - 1,)[
-            0
-        ]  # (batch_size,)
-
-        # Computing single metrics (mean over samples in the batch)
-        accuracy_halted = (
-            ((y_halted_batch > 0) == y_true_batch).to(torch.float32).mean()
-        )
-
-        metrics_single_["accuracy_halted"].append(accuracy_halted)
-        metrics_single_["halting_step"].append(halting_step.to(torch.float).mean())
-
-        # Computing per step metrics (mean over samples in the batch)
-        accuracy = (
-            ((y_pred_batch > 0) == y_true_batch[None, :]).to(torch.float32).mean(dim=1)
-        )
-
-        metrics_per_step_["accuracy"].append(accuracy)
-        metrics_per_step_["p"].append(p.mean(dim=1))
-
-    metrics_single = {
-        name: torch.stack(values).mean(dim=0).cpu().numpy()
-        for name, values in metrics_single_.items()
-    }
-
-    metrics_per_step = {
-        name: torch.stack(values).mean(dim=0).cpu().numpy()
-        for name, values in metrics_per_step_.items()
-    }
-
-    return metrics_single, metrics_per_step
+        samples = predictive(x_batch, eval=True)
+        pred_summary = summary(samples)
+        print(pred_summary)
 
 
 def custom_loss(model, guide, *args, **kwargs):
@@ -104,8 +51,6 @@ def custom_loss(model, guide, *args, **kwargs):
 
     elbo = 0.0
     y, p, halting_step = model_trace.nodes['_RETURN']['value']
-
-    print(model_trace.nodes)
 
     count = 0
     for site in model_trace.nodes.values():
@@ -373,32 +318,7 @@ def main(argv=None):
 
         # # Evaluation
         if step % args.eval_frequency == 0:
-            model.eval()
-
-            for dataloader_name, dataloader in eval_dataloaders.items():
-                metrics_single, metrics_per_step = evaluate(
-                    dataloader,
-                    model,
-                )
-                # fig_dist = plot_distributions(
-                #     loss_reg_inst.p_g.cpu().numpy(),
-                #     metrics_per_step["p"],
-                # )
-                # writer.add_figure(f"distributions/{dataloader_name}", fig_dist, step)
-
-                fig_acc = plot_accuracy(metrics_per_step["accuracy"])
-                writer.add_figure(f"accuracy_per_step/{dataloader_name}", fig_acc, step)
-
-                for metric_name, metric_value in metrics_single.items():
-                    writer.add_scalar(
-                        f"{metric_name}/{dataloader_name}",
-                        metric_value,
-                        step,
-                    )
-
-            torch.save(model, log_folder / "checkpoint.pth")
-
-            model.train()
+            evaluate(model, guide, eval_dataloaders['test'])
 
 
 if __name__ == "__main__":

@@ -61,7 +61,7 @@ class PonderNet(PyroModule):
         self.output_layer.weight = PyroSample(dist.Normal(torch.Tensor([0.]), torch.Tensor([1.])).expand([1, n_hidden]).to_event(2))
         self.output_layer.bias = PyroSample(dist.Normal(0., 1).expand([1]).to_event(1))
 
-    def forward(self, x, y_true=None):
+    def forward(self, x, y_true=None, eval=False):
         """Run forward pass.
 
         Parameters
@@ -138,6 +138,8 @@ class PonderNet(PyroModule):
             with pyro.plate(f"data_{n}", x.shape[0]):
                 obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)
 
+        if eval:
+            return y
         return y, p, halting_step
 
 
