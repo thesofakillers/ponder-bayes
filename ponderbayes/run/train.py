@@ -111,6 +111,7 @@ if __name__ == "__main__":
         enable_progress_bar=args.progress_bar,
         callbacks=[ckpt_cb],
         logger=logger,
+        gradient_clip_val=1,
     )
 
     # for reproducibility
