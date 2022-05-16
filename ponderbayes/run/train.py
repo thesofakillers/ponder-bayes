@@ -105,21 +105,30 @@ def custom_loss(model, guide, *args, **kwargs):
     elbo = 0.0
     y, p, halting_step = model_trace.nodes['_RETURN']['value']
 
-    print(model_trace.nodes)
+    # print(model_trace.nodes)
 
     count = 0
     for site in model_trace.nodes.values():
-        if site["type"] == "sample" and 'obs' in site["name"]:
-            score = site['fn'].log_prob(site['value']) * p[count]
+        if site["type"] == "sample":# and 'obs' in site["name"]:
+            # score = site['fn'].log_prob(site['value']) #* p[count]
+            # print(score.mean())
+            if ('_{}'.format(count) in site["name"]):
+                step = int(site['name'].split('_')[-1])
+                score = site['fn'].log_prob(site['value']) * p[step]
+            else:    
+                score = site['fn'].log_prob(site['value']) 
             elbo += score.mean()
-            count += 1
 
     count = 0
     for site in guide_trace.nodes.values():
-        if site["type"] == "sample" and 'obs' in site["name"]:
-            score = site['fn'].log_prob(site['value']) * p[count]
+        if site["type"] == "sample":# and 'obs' in site["name"]:
+            if '_{}'.format(count) in site["name"]:
+                step = int(site['name'].split('_')[-1])
+                score = site['fn'].log_prob(site['value']) * p[step]
+            else:    
+                score = site['fn'].log_prob(site['value']) 
+            # print(score.mean())
             elbo -= score.mean()
-            count += 1
     
     return -elbo 
 
@@ -201,8 +210,9 @@ def main(argv=None):
     parser = ArgumentParser()
 
     parser.add_argument(
-        "log_folder",
+        "--log_folder",
         type=str,
+        default="results/666",
         help="Folder where tensorboard logging is saved",
     )
     parser.add_argument(
@@ -293,6 +303,7 @@ def main(argv=None):
         range_nonzero_hard = (args.n_nonzero[1] + 1, args.n_elems)
 
     # Tensorboard
+    # log_folder = 'results/666'
     log_folder = pathlib.Path(args.log_folder)
     writer = SummaryWriter(log_folder)
     writer.add_text("parameters", json.dumps(vars(args)))

@@ -10,4 +10,4 @@ python train.py \
 	--n-elems 4 \
 	--n-iter 10000 \
 	--n-hidden 128 \
-	results/$SEED
+	--log_folder results/$SEED
