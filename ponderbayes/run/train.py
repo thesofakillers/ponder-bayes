@@ -98,35 +98,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # trainer config and instantiation
-    ckpt_cb = pl.callbacks.ModelCheckpoint(
-        save_top_k=1, monitor="val/accuracy_halted_step", mode="max"
-    )
-    logger = pl.loggers.TensorBoardLogger(
-        save_dir="models", name=f"{args.model}_{args.mode}"
-    )
-    trainer = pl.Trainer(
-        devices="auto",
-        accelerator="auto",
-        enable_progress_bar=args.progress_bar,
-        callbacks=[ckpt_cb],
-        logger=logger,
-        gradient_clip_val=1,
-    )
-
     # for reproducibility
     pl.seed_everything(args.seed)
-
-    parity_datamodule = datamodules.ParityDataModule(
-        n_train_samples=args.n_train_samples,
-        n_eval_samples=args.n_eval_samples,
-        n_elems=args.n_elems,
-        mode=args.mode,
-        n_nonzero_min=args.n_nonzero[0],
-        n_nonzero_max=args.n_nonzero[1],
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-    )
 
     # model instantiation
     if args.model == "pondernet":
@@ -145,5 +118,33 @@ if __name__ == "__main__":
             beta=args.beta,
             lambda_p=args.lambda_p,
         )
+
+    # trainer config and instantiation
+    cb_config = {"monitor": "val/accuracy_halted_step", "mode": "max"}
+    ckpt_cb = pl.callbacks.ModelCheckpoint(save_top_k=1, **cb_config)
+    stop_cb = pl.callbacks.EarlyStopping(**cb_config)
+    logger = pl.loggers.TensorBoardLogger(
+        save_dir="models", name=f"{args.model}_{args.mode}"
+    )
+    trainer = pl.Trainer(
+        devices="auto",
+        accelerator="auto",
+        enable_progress_bar=args.progress_bar,
+        callbacks=[ckpt_cb, stop_cb],
+        logger=logger,
+        gradient_clip_val=1,
+    )
+
+    parity_datamodule = datamodules.ParityDataModule(
+        n_train_samples=args.n_train_samples,
+        n_eval_samples=args.n_eval_samples,
+        n_elems=args.n_elems,
+        mode=args.mode,
+        n_nonzero_min=args.n_nonzero[0],
+        n_nonzero_max=args.n_nonzero[1],
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+    )
+
     # train
     trainer.fit(model, datamodule=parity_datamodule)
