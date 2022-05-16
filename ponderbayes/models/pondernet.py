@@ -1,9 +1,7 @@
 """
-Credit for PonderNet, ReconstructionLoss and RegularizationLoss largely to
+Credit for PonderNet, ReconstructionLoss and RegularizationLoss in part to
 https://github.com/jankrepl/mildlyoverfitted/tree/master/github_adventures/pondernet
 """
-from functools import partial
-
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -56,10 +54,12 @@ class PonderNet(pl.LightningModule):
         self.output_layer = nn.Linear(n_hidden, 1)
         self.lambda_layer = nn.Linear(n_hidden, 1)
 
-        self.loss_rec_inst = ReconstructionLoss(nn.BCEWithLogitsLoss(reduction="none"))
+        self.loss_rec_inst = ReconstructionLoss(
+            nn.BCEWithLogitsLoss(reduction="none")
+        ).to(torch.float32)
         self.loss_reg_inst = RegularizationLoss(
             lambda_p=self.lambda_p, max_steps=self.max_steps
-        )
+        ).to(torch.float32)
 
         self.save_hyperparameters()
 
@@ -171,6 +171,7 @@ class PonderNet(pl.LightningModule):
         """runs forward, computes accuracy and loss and logs"""
         # (batch_size, n_elems), (batch_size,)
         x_batch, y_true_batch = batch
+        y_true_batch = y_true_batch.double()
         # (max_steps, batch_size), (max_steps, batch_size), (batch_size,)
         y_pred_batch, p, halting_step = self(x_batch)
         # batch accuracy at the halted step, batch accuracy at each step
@@ -183,44 +184,62 @@ class PonderNet(pl.LightningModule):
         )
         # collating all results
         results = {
-            "halting_step": halting_step,
-            "p": p,
+            "halting_step": halting_step.double().mean(),
+            "p": p.mean(dim=1),
             "accuracy_halted_step": accuracy_halted_step,
             "accuracy_all_steps": accuracy_all_steps,
             "loss_rec": loss_rec,
             "loss_reg": loss_reg,
-            "loss_overall": loss_overall,
+            "loss": loss_overall,
         }
-        # logging
+        # logging; p and accuracy_all_steps logged in _shared_epoch_end
         self.log_dict(
             {
                 f"{phase}-{k}": results[k]
                 for k in [
                     "loss_rec",
                     "loss_reg",
-                    "loss_overall",
+                    "loss",
                     "halting_step",
                     "accuracy_halted_step",
                 ]
             }
         )
-        # need to force dimension 0 mean for per-step metrics
-        self.log_dict(
-            {f"{phase}-{k}": results[k] for k in ["p", "accuracy_all_steps"]},
-            reduce_fx=partial(torch.mean, dim=0),
-        )
         # needed for backward
-        return loss_overall
+        return results
 
     def training_step(self, batch, batch_idx):
-        loss_overall = self._shared_step(batch, batch_idx, "train")
-        return loss_overall
+        return self._shared_step(batch, batch_idx, "train")
 
     def validation_step(self, batch, batch_idx):
-        self._shared_step(batch, batch_idx, "val")
+        return self._shared_step(batch, batch_idx, "val")
 
     def test_step(self, batch, batch_idx):
-        self._shared_step(batch, batch_idx, "test")
+        return self._shared_step(batch, batch_idx, "test")
+
+    def _shared_epoch_end(self, outputs, phase):
+        """Accumulates and logs per-step metrics at the end of the epoch"""
+        accuracy_all_steps = torch.stack(
+            [output["accuracy_all_steps"] for output in outputs]
+        ).mean(dim=0)
+        p = torch.stack([output["p"] for output in outputs]).mean(dim=0)
+        for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
+            self.log(f"{phase}-step_{i}_accuracy", accuracy)
+            self.log(f"{phase}-step_{i}_p", step_p)
+
+    def training_epoch_end(self, outputs):
+        self._shared_epoch_end(outputs, "train")
+
+    def validation_epoch_end(self, outputs):
+        self._shared_epoch_end(outputs, "val")
+
+    def test_epoch_end(self, outputs):
+        self._shared_epoch_end(outputs, "test")
+
+    def configure_optimizers(self):
+        """Handles optimizers and schedulers"""
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.0003)
+        return optimizer
 
 
 class ReconstructionLoss(nn.Module):
