@@ -91,7 +91,7 @@ if __name__ == "__main__":
         help="Batch size",
     )
     parser.add_argument(
-        "--num_workers",
+        "--num-workers",
         type=int,
         default=3,
         help="The number of workers",
