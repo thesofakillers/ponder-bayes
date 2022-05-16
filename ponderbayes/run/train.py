@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n-hidden",
         type=int,
-        default=64,
+        default=128,
         help="Number of hidden elements in the reccurent cell",
     )
     parser.add_argument(
