@@ -195,7 +195,7 @@ class PonderNet(pl.LightningModule):
         # logging; p and accuracy_all_steps logged in _shared_epoch_end
         self.log_dict(
             {
-                f"{phase}-{k}": results[k]
+                f"{phase}/{k}": results[k]
                 for k in [
                     "loss_rec",
                     "loss_reg",
@@ -224,8 +224,8 @@ class PonderNet(pl.LightningModule):
         ).mean(dim=0)
         p = torch.stack([output["p"] for output in outputs]).mean(dim=0)
         for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
-            self.log(f"{phase}-step_{i}_accuracy", accuracy)
-            self.log(f"{phase}-step_{i}_p", step_p)
+            self.log(f"{phase}/step_accuracy/{i}", accuracy)
+            self.log(f"{phase}/step_p/{i}", step_p)
 
     def training_epoch_end(self, outputs):
         self._shared_epoch_end(outputs, "train")
