@@ -43,9 +43,10 @@ sh gen_pip_reqs.sh
     │   ├── interim/       <- Intermediate data that has been transformed.
     │   ├── processed/     <- The final, canonical data sets for modeling.
     │   └── raw/           <- The original, immutable data dump.
-    ├── models/            <- Trained and serialized models.
+    ├── models/            <- Trained and serialized models and logs
     ├── notebooks/         <- Jupyter notebooks.
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
+    ├── reports/           <- Generated analysis as HTML, PDF, LaTeX, etc.
+    ├── lisa/              <- LISA (slurm compute) scripts, jobs, config.
     ├── pyproject.toml     <- project metadata, handled by poetry.
     ├── poetry.lock        <- resolving and locking dependencies, handled by poetry.
     ├── requirements.txt   <- for non-poetry users.
