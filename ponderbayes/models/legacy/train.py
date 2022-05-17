@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from .pondernet import (
+from ponderbayes.models.legacy.pondernet import (
     ParityDataset,
     PonderNet,
     ReconstructionLoss,
