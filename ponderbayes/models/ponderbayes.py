@@ -136,105 +136,10 @@ class PonderBayes(PyroModule):
         y = torch.stack(y_list)
         p = torch.stack(p_list)
 
-        for n in range(20):
+        for n in range(self.max_steps):
             sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
             mean = y[n]
             with pyro.plate(f"data_{n}", x.shape[0]):
                 obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)
 
         return y, p, halting_step
-
-
-class ReconstructionLoss(nn.Module):
-    """Weighted average of per step losses.
-
-    Parameters
-    ----------
-    loss_func : callable
-        Loss function that accepts `y_pred` and `y_true` as arguments. Both
-        of these tensors have shape `(batch_size,)`. It outputs a loss for
-        each sample in the batch.
-    """
-
-    def __init__(self, loss_func):
-        super().__init__()
-
-        self.loss_func = loss_func
-
-    def forward(self, p, x_batch, y_true, model, guide):
-        """Compute loss.
-
-        Parameters
-        ----------
-        p : torch.Tensor
-            Probability of halting of shape `(max_steps, batch_size)`.
-
-        y_pred : torch.Tensor
-            Predicted outputs of shape `(max_steps, batch_size)`.
-
-        y_true : torch.Tensor
-            True targets of shape `(batch_size,)`.
-
-        Returns
-        -------
-        loss : torch.Tensor
-            Scalar representing the reconstruction loss. It is nothing else
-            than a weighted sum of per step losses.
-        """
-        max_steps, _ = p.shape
-        total_loss = p.new_tensor(0.0)
-
-        for n in range(max_steps):
-            loss_per_sample = p[n] * self.loss_func(x_batch, y_true)  # (batch_size,)
-            total_loss = total_loss + loss_per_sample.mean()  # (1,)
-
-        return total_loss
-
-
-class RegularizationLoss(nn.Module):
-    """Enforce halting distribution to ressemble the geometric distribution.
-
-    Parameters
-    ----------
-    lambda_p : float
-        The single parameter determining uniquely the geometric distribution.
-        Note that the expected value of this distribution is going to be
-        `1 / lambda_p`.
-
-    max_steps : int
-        Maximum number of pondering steps.
-    """
-
-    def __init__(self, lambda_p, max_steps=20):
-        super().__init__()
-
-        p_g = torch.zeros((max_steps,))
-        not_halted = 1.0
-
-        for k in range(max_steps):
-            p_g[k] = not_halted * lambda_p
-            not_halted = not_halted * (1 - lambda_p)
-
-        self.register_buffer("p_g", p_g)
-        self.kl_div = nn.KLDivLoss(reduction="batchmean")
-
-    def forward(self, p):
-        """Compute loss.
-
-        Parameters
-        ----------
-        p : torch.Tensor
-            Probability of halting of shape `(steps, batch_size)`.
-
-        Returns
-        -------
-        loss : torch.Tensor
-            Scalar representing the regularization loss.
-        """
-        steps, batch_size = p.shape
-
-        p = p.transpose(0, 1)  # (batch_size, max_steps)
-
-        p_g_batch = self.p_g[None, :steps].expand_as(p)  # (batch_size, max_steps)
-
-        return self.kl_div(p.log(), p_g_batch)
