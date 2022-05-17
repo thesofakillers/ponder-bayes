@@ -53,6 +53,7 @@ class PonderBayes(pl.LightningModule):
         allow_halting=False,
         beta=0.01,
         lambda_p=0.4,
+        lr=0.0003,
     ):
         super().__init__()
 
@@ -62,13 +63,14 @@ class PonderBayes(pl.LightningModule):
         self.allow_halting = allow_halting
         self.beta = beta
         self.lambda_p = lambda_p
+        self.lr = lr
 
         self.cell = nn.GRUCell(n_elems, n_hidden)
         self.output_layer = PyroModule[nn.Linear](n_hidden, 1)
         self.lambda_layer = nn.Linear(n_hidden, 1)
 
         self.guide = AutoDiagonalNormal(self)
-        self.svi = SVI(self, self.guide, self.optim, loss=Trace_ELBO())
+        self.svi = SVI(self, self.guide, self.optim, loss=losses.custom_loss)
 
         self.loss_reg_inst = losses.RegularizationLoss(
             lambda_p=self.lambda_p, max_steps=self.max_steps
@@ -82,6 +84,7 @@ class PonderBayes(pl.LightningModule):
         self.output_layer.bias = PyroSample(dist.Normal(0.0, 1).expand([1]).to_event(1))
 
         self.save_hyperparameters()
+        self.automatic_optimization = False
 
     def forward(self, x, y_true=None):
         """Run forward pass.
@@ -158,6 +161,9 @@ class PonderBayes(pl.LightningModule):
 
         return y, p, halting_step
 
+    def on_train_start(self):
+        pyro.clear_param_store()
+
     def _accuracy_step(self, y_pred_batch, y_true_batch, halting_step):
         """computes accuracy metrics for a given batch"""
         # (batch_size,) the prediction where the model halted
@@ -202,7 +208,7 @@ class PonderBayes(pl.LightningModule):
         print(loss)
 
         # # (max_steps, batch_size), (max_steps, batch_size), (batch_size,)
-        # y_pred_batch, p, halting_step = self(x_batch)
+        y_pred_batch, p, halting_step = self(batch)
 
         # batch accuracy at the halted step, batch accuracy at each step
         accuracy_halted_step, accuracy_all_steps = self._accuracy_step(
@@ -266,5 +272,5 @@ class PonderBayes(pl.LightningModule):
 
     def configure_optimizers(self):
         """Handles optimizers and schedulers"""
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.0003)
+        optimizer = pyro.optim.Adam({"lr": self.lr})
         return optimizer
