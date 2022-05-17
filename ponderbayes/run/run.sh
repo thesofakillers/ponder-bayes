@@ -1,10 +1,10 @@
 set -x 
 SEED=$RANDOM
 
-python train_old.py \
+python train_older.py \
 	--batch-size 128 \
 	--beta 0.01 \
-	--eval-frequency 250 \
+	--eval-frequency 500 \
 	--device cpu \
 	--lambda-p 0.2 \
 	--n-elems 4 \

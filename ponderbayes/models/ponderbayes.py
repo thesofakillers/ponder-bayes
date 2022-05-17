@@ -4,6 +4,9 @@ https://github.com/jankrepl/mildlyoverfitted/tree/master/github_adventures/ponde
 """
 import torch
 import torch.nn as nn
+
+import pytorch_lightning as pl
+
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
@@ -82,7 +85,7 @@ class PonderBayes(PyroModule):
         )
         self.output_layer.bias = PyroSample(dist.Normal(0.0, 1).expand([1]).to_event(1))
 
-        self.save_hyperparameters()
+        # self.save_hyperparameters()
 
     def forward(self, x, y_true=None):
         """Run forward pass.

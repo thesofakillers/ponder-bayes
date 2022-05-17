@@ -15,13 +15,11 @@ from pyro.infer import SVI, Trace_ELBO
 import pyro.poutine as poutine
 
 from ponderbayes.models.ponderbayes import (
-    PonderBayes,
-    ReconstructionLoss,
-    RegularizationLoss,
+    PonderBayes
 )
 
 from ponderbayes.data.datasets import ParityDataset
-
+from ponderbayes.models.losses import custom_loss
 
 @torch.no_grad()
 def evaluate(dataloader, module):
@@ -97,40 +95,6 @@ def evaluate(dataloader, module):
 
     return metrics_single, metrics_per_step
 
-
-def custom_loss(model, guide, *args, **kwargs):
-    guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(
-        *args, **kwargs
-    )
-
-    elbo = 0.0
-    y, p, halting_step = model_trace.nodes["_RETURN"]["value"]
-
-    # print(model_trace.nodes)
-
-    # We are interested in obs_step and output layer weights and biases
-    # count = 0
-    for site in model_trace.nodes.values():
-        if site["type"] == "sample":
-            if "obs" in site["name"]:
-                step = int(site["name"].split("_")[-1])
-                score = site["fn"].log_prob(site["value"]) * p[step]
-            else:
-                score = site["fn"].log_prob(site["value"])
-            elbo += score.mean()
-
-    # count = 0
-    for site in guide_trace.nodes.values():
-        if site["type"] == "sample":
-            if "obs" in site["name"]:
-                step = int(site["name"].split("_")[-1])
-                score = site["fn"].log_prob(site["value"]) * p[step]
-            else:
-                score = site["fn"].log_prob(site["value"])
-            elbo -= score.mean()
-
-    return -elbo
 
 
 def plot_distributions(target, predicted):
@@ -356,10 +320,10 @@ def main(argv=None):
     guide = AutoDiagonalNormal(model)
     # module = module.to(device, dtype)
 
-    loss_reg_inst = RegularizationLoss(
-        lambda_p=args.lambda_p,
-        max_steps=args.max_steps,
-    ).to(device, dtype)
+    # loss_reg_inst = RegularizationLoss(
+    #     lambda_p=args.lambda_p,
+    #     max_steps=args.max_steps,
+    # ).to(device, dtype)
 
     # Optimizer
     adam = pyro.optim.Adam({"lr": 0.03})
@@ -373,42 +337,50 @@ def main(argv=None):
 
     # Training and evaluation loops
     pyro.clear_param_store()
-    iterator = tqdm(enumerate(dataloader_train), total=args.n_iter)
-    for step, (x_batch, y_true_batch) in iterator:
-        x_batch = x_batch.to(device, dtype)
-        y_true_batch = y_true_batch.to(device, dtype)
+    
+    for epoch in range(12):
+        iterator = tqdm(enumerate(dataloader_train), total=args.n_iter)
+        for step, (x_batch, y_true_batch) in iterator:
+            x_batch = x_batch.to(device, dtype)
+            y_true_batch = y_true_batch.to(device, dtype)
 
-        loss = svi.step(x_batch, y_true_batch)
-        print(loss)
+            loss = svi.step(x_batch, y_true_batch)
+           
+           
+            # # Evaluation
+            if step % args.eval_frequency == 0:
+                writer.add_scalar(
+                            "training/loss",
+                            loss, # print(loss)
 
-        # # Evaluation
-        if step % args.eval_frequency == 0:
-            model.eval()
+                            (epoch+1)*step,
+                        )
+                model.eval()
 
-            for dataloader_name, dataloader in eval_dataloaders.items():
-                metrics_single, metrics_per_step = evaluate(
-                    dataloader,
-                    model,
-                )
-                # fig_dist = plot_distributions(
-                #     loss_reg_inst.p_g.cpu().numpy(),
-                #     metrics_per_step["p"],
-                # )
-                # writer.add_figure(f"distributions/{dataloader_name}", fig_dist, step)
-
-                fig_acc = plot_accuracy(metrics_per_step["accuracy"])
-                writer.add_figure(f"accuracy_per_step/{dataloader_name}", fig_acc, step)
-
-                for metric_name, metric_value in metrics_single.items():
-                    writer.add_scalar(
-                        f"{metric_name}/{dataloader_name}",
-                        metric_value,
-                        step,
+                for dataloader_name, dataloader in eval_dataloaders.items():
+                    metrics_single, metrics_per_step = evaluate(
+                        dataloader,
+                        model,
                     )
+                    # fig_dist = plot_distributions(
+                    #     loss_reg_inst.p_g.cpu().numpy(),
+                    #     metrics_per_step["p"],
+                    # )
+                    # writer.add_figure(f"distributions/{dataloader_name}", fig_dist, step)
 
-            torch.save(model, log_folder / "checkpoint.pth")
+                    fig_acc = plot_accuracy(metrics_per_step["accuracy"])
+                    writer.add_figure(f"accuracy_per_step/{dataloader_name}", fig_acc, step)
 
-            model.train()
+                    for metric_name, metric_value in metrics_single.items():
+                        writer.add_scalar(
+                            f"{metric_name}/{dataloader_name}",
+                            metric_value,
+                            (epoch+1)*step,
+                        )
+
+                torch.save(model, log_folder / "checkpoint.pth")
+
+                model.train()
 
 
 if __name__ == "__main__":
