@@ -109,27 +109,25 @@ def custom_loss(model, guide, *args, **kwargs):
 
     # print(model_trace.nodes)
 
-    count = 0
+    # We are interested in obs_step and output layer weights and biases
+    # count = 0
     for site in model_trace.nodes.values():
-        if site["type"] == "sample":  # and 'obs' in site["name"]:
-            # score = site['fn'].log_prob(site['value']) #* p[count]
-            # print(score.mean())
-            if "_{}".format(count) in site["name"]:
+        if site["type"] == "sample":
+            if "obs" in site["name"]:
                 step = int(site["name"].split("_")[-1])
                 score = site["fn"].log_prob(site["value"]) * p[step]
             else:
                 score = site["fn"].log_prob(site["value"])
             elbo += score.mean()
 
-    count = 0
+    # count = 0
     for site in guide_trace.nodes.values():
-        if site["type"] == "sample":  # and 'obs' in site["name"]:
-            if "_{}".format(count) in site["name"]:
+        if site["type"] == "sample":
+            if "obs" in site["name"]:
                 step = int(site["name"].split("_")[-1])
                 score = site["fn"].log_prob(site["value"]) * p[step]
             else:
                 score = site["fn"].log_prob(site["value"])
-            # print(score.mean())
             elbo -= score.mean()
 
     return -elbo

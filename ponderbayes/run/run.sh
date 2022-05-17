@@ -1,7 +1,7 @@
 set -x 
 SEED=$RANDOM
 
-python train.py \
+python train_old.py \
 	--batch-size 128 \
 	--beta 0.01 \
 	--eval-frequency 250 \
