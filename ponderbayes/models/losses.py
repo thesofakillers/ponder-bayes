@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import pyro.poutine as poutine
 
 
 class ReconstructionLoss(nn.Module):
@@ -95,3 +96,38 @@ class RegularizationLoss(nn.Module):
         p_g_batch = self.p_g[None, :steps].expand_as(p)  # (batch_size, max_steps)
 
         return self.kl_div(p.log(), p_g_batch)
+
+
+def custom_loss(model, guide, *args, **kwargs):
+    guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
+    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(
+        *args, **kwargs
+    )
+
+    elbo = 0.0
+    y, p, halting_step = model_trace.nodes["_RETURN"]["value"]
+
+    # print(model_trace.nodes)
+
+    # We are interested in obs_step and output layer weights and biases
+    for site in model_trace.nodes.values():
+        if site["type"] == "sample":
+            if "obs" in site["name"]:
+                step = int(site["name"].split("_")[-1])
+                score = site["fn"].log_prob(site["value"]) * p[step]
+            else:
+                score = site["fn"].log_prob(site["value"])
+            elbo += score.mean()
+
+    for site in guide_trace.nodes.values():
+        if site["type"] == "sample":
+            if "obs" in site["name"]:
+                step = int(site["name"].split("_")[-1])
+                score = site["fn"].log_prob(site["value"]) * p[step]
+            else:
+                score = site["fn"].log_prob(site["value"])
+            elbo -= score.mean()
+
+    # reg_loss = model.loss_reg_inst(p) * model.beta
+    reg_loss = 0.0
+    return -elbo + reg_loss

@@ -63,25 +63,25 @@ class PonderBayes(pl.LightningModule):
         self.beta = beta
         self.lambda_p = lambda_p
 
-        self.cell = PyroModule[nn.GRUCell](n_elems, n_hidden)
+        self.cell = nn.GRUCell(n_elems, n_hidden)
         self.output_layer = PyroModule[nn.Linear](n_hidden, 1)
-        self.lambda_layer = PyroModule[nn.Linear](n_hidden, 1)
-        self.output_layer.weight = PyroSample(dist.Normal(torch.Tensor([0.]), torch.Tensor([1.])).expand([1, n_hidden]).to_event(2))
-        self.output_layer.bias = PyroSample(dist.Normal(0., 1).expand([1]).to_event(1))
+        self.lambda_layer = nn.Linear(n_hidden, 1)
 
-        # self.loss_rec_inst = losses.ReconstructionLoss(
-        #     nn.BCEWithLogitsLoss(reduction="none")
-        # ).to(torch.float32)
-        # self.loss_reg_inst = losses.RegularizationLoss(
-        #     lambda_p=self.lambda_p, max_steps=self.max_steps
-        # ).to(torch.float32)
-
-        self.optim = pyro.optim.Adam({"lr": 0.03})
         self.guide = AutoDiagonalNormal(self)
         self.svi = SVI(self, self.guide, self.optim, loss=Trace_ELBO())
 
+        self.loss_reg_inst = losses.RegularizationLoss(
+            lambda_p=self.lambda_p, max_steps=self.max_steps
+        ).to(torch.float32)
+
+        self.output_layer.weight = PyroSample(
+            dist.Normal(torch.Tensor([0.0]), torch.Tensor([1.0]))
+            .expand([1, n_hidden])
+            .to_event(2)
+        )
+        self.output_layer.bias = PyroSample(dist.Normal(0.0, 1).expand([1]).to_event(1))
+
         self.save_hyperparameters()
-        self.automatic_optimization = False
 
     def forward(self, x, y_true=None):
         """Run forward pass.
@@ -132,6 +132,8 @@ class PonderBayes(pl.LightningModule):
             y_list.append(self.output_layer(h)[:, 0])  # (batch_size,)
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
 
+            # print(lambda_n)
+
             halting_step = torch.maximum(
                 n * (halting_step == 0) * torch.bernoulli(lambda_n).to(torch.long),
                 halting_step,
@@ -144,46 +146,17 @@ class PonderBayes(pl.LightningModule):
             # Potentially stop if all samples halted
             if self.allow_halting and (halting_step > 0).sum() == batch_size:
                 break
-        
+
         y = torch.stack(y_list)
         p = torch.stack(p_list)
 
-        for n in range(20):
-            sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0., 1.))
+        for n in range(self.max_steps):
+            sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
             mean = y[n]
             with pyro.plate(f"data_{n}", x.shape[0]):
                 obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)
 
         return y, p, halting_step
-
-    def custom_loss(model, guide, *args, **kwargs):
-        guide_trace = poutine.trace(guide).get_trace(*args[1:], **kwargs)
-        model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args[1:], **kwargs)
-
-        elbo = 0.0
-        y, p, halting_step = model_trace.nodes['_RETURN']['value']
-
-        count = 0
-        for site in model_trace.nodes.values():
-            if site["type"] == "sample":
-                if ('_{}'.format(count) in site["name"]):
-                    step = int(site['name'].split('_')[-1])
-                    score = site['fn'].log_prob(site['value']) * p[step]
-                else:    
-                    score = site['fn'].log_prob(site['value']) 
-                elbo += score.mean()
-
-        count = 0
-        for site in guide_trace.nodes.values():
-            if site["type"] == "sample":
-                if '_{}'.format(count) in site["name"]:
-                    step = int(site['name'].split('_')[-1])
-                    score = site['fn'].log_prob(site['value']) * p[step]
-                else:    
-                    score = site['fn'].log_prob(site['value']) 
-                elbo -= score.mean()
-        
-        return -elbo, y, p, halting_step
 
     def _accuracy_step(self, y_pred_batch, y_true_batch, halting_step):
         """computes accuracy metrics for a given batch"""
@@ -225,7 +198,7 @@ class PonderBayes(pl.LightningModule):
         y_true = y_true_batch.double()
 
         loss = self.svi.step(x, y_true)
-        #, y_pred_batch, p, halting_step
+        # , y_pred_batch, p, halting_step
         print(loss)
 
         # # (max_steps, batch_size), (max_steps, batch_size), (batch_size,)
