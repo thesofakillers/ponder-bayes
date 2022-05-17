@@ -1,6 +1,8 @@
 import argparse
 
 import pytorch_lightning as pl
+import pyro
+from pyro.infer.autoguide import AutoDiagonalNormal
 
 import ponderbayes.models as models
 import ponderbayes.data.datamodules as datamodules
@@ -57,7 +59,7 @@ if __name__ == "__main__":
         "--progress-bar",
         action="store_true",
         help="whether to show the progress bar",
-        default=False,
+        default=True,
     )
     parser.add_argument(
         "--n-train-samples",
@@ -104,6 +106,8 @@ if __name__ == "__main__":
     # model instantiation
     if args.model == "pondernet":
         model_class = models.pondernet.PonderNet
+    elif args.model == 'ponderbayes':
+        model_class = models.ponderbayes.PonderBayes
     else:
         raise ValueError("Invalid `model` arg passed")
     if args.checkpoint:
@@ -128,11 +132,10 @@ if __name__ == "__main__":
     )
     trainer = pl.Trainer(
         devices="auto",
-        accelerator="auto",
+        accelerator="cpu",
         enable_progress_bar=args.progress_bar,
         callbacks=[ckpt_cb, stop_cb],
         logger=logger,
-        gradient_clip_val=1,
     )
 
     parity_datamodule = datamodules.ParityDataModule(
@@ -147,4 +150,5 @@ if __name__ == "__main__":
     )
 
     # train
+    pyro.clear_param_store()
     trainer.fit(model, datamodule=parity_datamodule)
