@@ -15,7 +15,7 @@ from pyro.infer.autoguide import AutoNormal
 from pyro.optim import Adam
 
 
-class PonderNet(PyroModule):
+class PonderBayes(PyroModule):
     """Network that ponders.
 
     Parameters
@@ -55,11 +55,15 @@ class PonderNet(PyroModule):
         self.n_hidden = n_hidden
         self.allow_halting = allow_halting
 
-        self.cell = PyroModule[nn.GRUCell](n_elems, n_hidden)
+        self.cell = nn.GRUCell(n_elems, n_hidden)
         self.output_layer = PyroModule[nn.Linear](n_hidden, 1)
-        self.lambda_layer = PyroModule[nn.Linear](n_hidden, 1)
-        self.output_layer.weight = PyroSample(dist.Normal(torch.Tensor([0.]), torch.Tensor([1.])).expand([1, n_hidden]).to_event(2))
-        self.output_layer.bias = PyroSample(dist.Normal(0., 1).expand([1]).to_event(1))
+        self.lambda_layer = nn.Linear(n_hidden, 1)
+        self.output_layer.weight = PyroSample(
+            dist.Normal(torch.Tensor([0.0]), torch.Tensor([1.0]))
+            .expand([1, n_hidden])
+            .to_event(2)
+        )
+        self.output_layer.bias = PyroSample(dist.Normal(0.0, 1).expand([1]).to_event(1))
 
     def forward(self, x, y_true=None):
         """Run forward pass.
@@ -128,12 +132,12 @@ class PonderNet(PyroModule):
             # Potentially stop if all samples halted
             if self.allow_halting and (halting_step > 0).sum() == batch_size:
                 break
-        
+
         y = torch.stack(y_list)
         p = torch.stack(p_list)
 
         for n in range(20):
-            sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0., 1.))
+            sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
             mean = y[n]
             with pyro.plate(f"data_{n}", x.shape[0]):
                 obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)

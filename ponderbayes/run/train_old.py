@@ -15,7 +15,7 @@ from pyro.infer import SVI, Trace_ELBO
 import pyro.poutine as poutine
 
 from ponderbayes.models.ponderbayes import (
-    PonderNet,
+    PonderBayes,
     ReconstructionLoss,
     RegularizationLoss,
 )
@@ -100,38 +100,39 @@ def evaluate(dataloader, module):
 
 def custom_loss(model, guide, *args, **kwargs):
     guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args, **kwargs)
+    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(
+        *args, **kwargs
+    )
 
     elbo = 0.0
-    y, p, halting_step = model_trace.nodes['_RETURN']['value']
+    y, p, halting_step = model_trace.nodes["_RETURN"]["value"]
 
     # print(model_trace.nodes)
 
     count = 0
     for site in model_trace.nodes.values():
-        if site["type"] == "sample":# and 'obs' in site["name"]:
+        if site["type"] == "sample":  # and 'obs' in site["name"]:
             # score = site['fn'].log_prob(site['value']) #* p[count]
             # print(score.mean())
-            if ('_{}'.format(count) in site["name"]):
-                step = int(site['name'].split('_')[-1])
-                score = site['fn'].log_prob(site['value']) * p[step]
-            else:    
-                score = site['fn'].log_prob(site['value']) 
+            if "_{}".format(count) in site["name"]:
+                step = int(site["name"].split("_")[-1])
+                score = site["fn"].log_prob(site["value"]) * p[step]
+            else:
+                score = site["fn"].log_prob(site["value"])
             elbo += score.mean()
 
     count = 0
     for site in guide_trace.nodes.values():
-        if site["type"] == "sample":# and 'obs' in site["name"]:
-            if '_{}'.format(count) in site["name"]:
-                step = int(site['name'].split('_')[-1])
-                score = site['fn'].log_prob(site['value']) * p[step]
-            else:    
-                score = site['fn'].log_prob(site['value']) 
+        if site["type"] == "sample":  # and 'obs' in site["name"]:
+            if "_{}".format(count) in site["name"]:
+                step = int(site["name"].split("_")[-1])
+                score = site["fn"].log_prob(site["value"]) * p[step]
+            else:
+                score = site["fn"].log_prob(site["value"])
             # print(score.mean())
             elbo -= score.mean()
-    
-    return -elbo 
 
+    return -elbo
 
 
 def plot_distributions(target, predicted):
@@ -349,7 +350,7 @@ def main(argv=None):
     }
 
     # Model preparation
-    model = PonderNet(
+    model = PonderBayes(
         n_elems=args.n_elems,
         n_hidden=args.n_hidden,
         max_steps=args.max_steps,
