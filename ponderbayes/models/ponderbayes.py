@@ -13,6 +13,7 @@ from pyro.nn.module import to_pyro_module_
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal
 from pyro.optim import Adam
+from ponderbayes.models import losses
 
 
 class PonderBayes(PyroModule):
@@ -48,22 +49,40 @@ class PonderBayes(PyroModule):
 
     """
 
-    def __init__(self, n_elems, n_hidden=64, max_steps=20, allow_halting=False):
+    def __init__(
+        self,
+        n_elems,
+        n_hidden=64,
+        max_steps=20,
+        allow_halting=False,
+        beta=0.01,
+        lambda_p=0.4,
+    ):
         super().__init__()
 
-        self.max_steps = max_steps
+        self.n_elems = n_elems
         self.n_hidden = n_hidden
+        self.max_steps = max_steps
         self.allow_halting = allow_halting
+        self.beta = beta
+        self.lambda_p = lambda_p
 
         self.cell = nn.GRUCell(n_elems, n_hidden)
         self.output_layer = PyroModule[nn.Linear](n_hidden, 1)
         self.lambda_layer = nn.Linear(n_hidden, 1)
+
+        self.loss_reg_inst = losses.RegularizationLoss(
+            lambda_p=self.lambda_p, max_steps=self.max_steps
+        ).to(torch.float32)
+
         self.output_layer.weight = PyroSample(
             dist.Normal(torch.Tensor([0.0]), torch.Tensor([1.0]))
             .expand([1, n_hidden])
             .to_event(2)
         )
         self.output_layer.bias = PyroSample(dist.Normal(0.0, 1).expand([1]).to_event(1))
+
+        self.save_hyperparameters()
 
     def forward(self, x, y_true=None):
         """Run forward pass.
