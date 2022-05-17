@@ -69,8 +69,9 @@ class PonderBayes(pl.LightningModule):
         self.output_layer = PyroModule[nn.Linear](n_hidden, 1)
         self.lambda_layer = nn.Linear(n_hidden, 1)
 
+        # necessary for Bayesian Inference
+        self.automatic_optimization = False
         self.guide = AutoDiagonalNormal(self)
-        self.svi = SVI(self, self.guide, self.optim, loss=losses.custom_loss)
 
         self.loss_reg_inst = losses.RegularizationLoss(
             lambda_p=self.lambda_p, max_steps=self.max_steps
@@ -84,7 +85,11 @@ class PonderBayes(pl.LightningModule):
         self.output_layer.bias = PyroSample(dist.Normal(0.0, 1).expand([1]).to_event(1))
 
         self.save_hyperparameters()
-        self.automatic_optimization = False
+
+    def on_train_start(self):
+        pyro.clear_param_store()
+        opt = self.optimizers()
+        self.svi = SVI(self, self.guide, opt, loss=losses.custom_loss)
 
     def forward(self, x, y_true=None):
         """Run forward pass.
@@ -160,9 +165,6 @@ class PonderBayes(pl.LightningModule):
                 obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)
 
         return y, p, halting_step
-
-    def on_train_start(self):
-        pyro.clear_param_store()
 
     def _accuracy_step(self, y_pred_batch, y_true_batch, halting_step):
         """computes accuracy metrics for a given batch"""
