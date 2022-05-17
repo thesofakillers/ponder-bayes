@@ -28,7 +28,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n-elems",
         type=int,
-        default=64,
+        default=16,
         help="Number of elements in the parity vectors",
     )
     parser.add_argument(
@@ -98,6 +98,15 @@ if __name__ == "__main__":
         default=3,
         help="The number of workers",
     )
+    parser.add_argument(
+        "--early_stopping",
+        action="store_true",
+        default=False,
+        help="Whether to use early stopping",
+    )
+    parser.add_argument(
+        "--n-iter", type=int, default=100000, help="Number of training steps to use"
+    )
     args = parser.parse_args()
 
     # for reproducibility
@@ -126,7 +135,10 @@ if __name__ == "__main__":
     # trainer config and instantiation
     cb_config = {"monitor": "val/accuracy_halted_step", "mode": "max"}
     ckpt_cb = pl.callbacks.ModelCheckpoint(save_top_k=1, **cb_config)
-    stop_cb = pl.callbacks.EarlyStopping(**cb_config)
+    callbacks = [ckpt_cb]
+    if args.early_stopping:
+        stop_cb = pl.callbacks.EarlyStopping(**cb_config)
+        callbacks.append(stop_cb)
     logger = pl.loggers.TensorBoardLogger(
         save_dir="models", name=f"{args.model}_{args.mode}"
     )
@@ -134,7 +146,8 @@ if __name__ == "__main__":
         devices="auto",
         accelerator="cpu",
         enable_progress_bar=args.progress_bar,
-        callbacks=[ckpt_cb, stop_cb],
+        max_steps=args.n_iter,
+        callbacks=callbacks,
         logger=logger,
     )
 
