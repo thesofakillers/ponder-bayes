@@ -14,7 +14,7 @@ from torch.distributions import constraints
 from pyro.nn import PyroModule, PyroParam, PyroSample
 from pyro.nn.module import to_pyro_module_
 from pyro.infer import SVI, Trace_ELBO
-from pyro.infer.autoguide import AutoNormal
+from pyro.infer.autoguide import AutoNormal, AutoMultivariateNormal, init_to_mean
 from pyro.optim import Adam
 from ponderbayes.models import losses
 
@@ -79,11 +79,11 @@ class PonderBayes(PyroModule):
         ).to(torch.float32)
 
         self.output_layer.weight = PyroSample(
-            dist.Normal(torch.Tensor([0.0]), torch.Tensor([1.0]))
+            dist.Normal(torch.Tensor([0.0]), torch.Tensor([10.0]))
             .expand([1, n_hidden])
             .to_event(2)
         )
-        self.output_layer.bias = PyroSample(dist.Normal(0.0, 1).expand([1]).to_event(1))
+        self.output_layer.bias = PyroSample(dist.Normal(0.0, 10).expand([1]).to_event(1))
 
         # self.save_hyperparameters()
 
@@ -159,7 +159,9 @@ class PonderBayes(PyroModule):
         p = torch.stack(p_list)
 
         for n in range(self.max_steps):
-            sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
+            # sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
+            sigma = pyro.sample(f"sigma_{n}", dist.Gamma(.5, 1))
+
             mean = y[n]
             with pyro.plate(f"data_{n}", x.shape[0]):
                 obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)

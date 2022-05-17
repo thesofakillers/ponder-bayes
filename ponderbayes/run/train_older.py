@@ -9,9 +9,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from pyro.infer.autoguide import AutoDiagonalNormal
+from pyro.infer.autoguide import AutoDiagonalNormal, AutoMultivariateNormal, init_to_mean
 import pyro
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, Trace_ELBO, Predictive
 import pyro.poutine as poutine
 
 from ponderbayes.models.ponderbayes import (
@@ -21,8 +21,82 @@ from ponderbayes.models.ponderbayes import (
 from ponderbayes.data.datasets import ParityDataset
 from ponderbayes.models.losses import custom_loss
 
+# @torch.no_grad()
+# def evaluate(dataloader, module):
+#     """Compute relevant metrics.
+
+#     Parameters
+#     ----------
+#     dataloader : DataLoader
+#         Dataloader that yields batches of `x` and `y`.
+
+#     module : PonderNet
+#         Our pondering network.
+
+#     Returns
+#     -------
+#     metrics_single : dict
+#         Scalar metrics. The keys are names and the values are `torch.Tensor`.
+#         These metrics are computed as mean values over the entire dataset.
+
+#     metrics_per_step : dict
+#         Per step metrics. The keys are names and the values are `torch.Tensor`
+#         of shape `(max_steps,)`. These metrics are computed as mean values over
+#         the entire dataset.
+
+#     """
+#     # Imply device and dtype
+#     param = next(module.parameters())
+#     device, dtype = param.device, param.dtype
+
+#     metrics_single_ = {
+#         "accuracy_halted": [],
+#         "halting_step": [],
+#     }
+#     metrics_per_step_ = {
+#         "accuracy": [],
+#         "p": [],
+#     }
+
+#     for x_batch, y_true_batch in dataloader:
+#         x_batch = x_batch.to(device, dtype)  # (batch_size, n_elems)
+#         y_true_batch = y_true_batch.to(device, dtype)  # (batch_size,)
+
+#         y_pred_batch, p, halting_step = module(x_batch)
+#         y_halted_batch = y_pred_batch.gather(dim=0, index=halting_step[None, :] - 1,)[
+#             0
+#         ]  # (batch_size,)
+
+#         # Computing single metrics (mean over samples in the batch)
+#         accuracy_halted = (
+#             ((y_halted_batch > 0) == y_true_batch).to(torch.float32).mean()
+#         )
+
+#         metrics_single_["accuracy_halted"].append(accuracy_halted)
+#         metrics_single_["halting_step"].append(halting_step.to(torch.float).mean())
+
+#         # Computing per step metrics (mean over samples in the batch)
+#         accuracy = (
+#             ((y_pred_batch > 0) == y_true_batch[None, :]).to(torch.float32).mean(dim=1)
+#         )
+
+#         metrics_per_step_["accuracy"].append(accuracy)
+#         metrics_per_step_["p"].append(p.mean(dim=1))
+
+#     metrics_single = {
+#         name: torch.stack(values).mean(dim=0).cpu().numpy()
+#         for name, values in metrics_single_.items()
+#     }
+
+#     metrics_per_step = {
+#         name: torch.stack(values).mean(dim=0).cpu().numpy()
+#         for name, values in metrics_per_step_.items()
+#     }
+
+#     return metrics_single, metrics_per_step
+
 @torch.no_grad()
-def evaluate(dataloader, module):
+def evaluate(dataloader, module,guide=None):
     """Compute relevant metrics.
 
     Parameters
@@ -51,6 +125,7 @@ def evaluate(dataloader, module):
 
     metrics_single_ = {
         "accuracy_halted": [],
+        "accuracy_halted_predictive": [],
         "halting_step": [],
     }
     metrics_per_step_ = {
@@ -62,17 +137,30 @@ def evaluate(dataloader, module):
         x_batch = x_batch.to(device, dtype)  # (batch_size, n_elems)
         y_true_batch = y_true_batch.to(device, dtype)  # (batch_size,)
 
+        # predictive = Predictive(module, guide=guide, num_samples=3,return_sites=["_RETURN"])
+        predictive = Predictive(module, guide=guide, num_samples=3)
+        predictions = predictive(x_batch)
         y_pred_batch, p, halting_step = module(x_batch)
         y_halted_batch = y_pred_batch.gather(dim=0, index=halting_step[None, :] - 1,)[
             0
         ]  # (batch_size,)
 
+        y_halted_predictive = torch.zeros_like(y_halted_batch)
+        for sample in range(x_batch.shape[0]):
+            h_step = int(halting_step[sample])
+            y_halted_predictive[sample] = predictions[f'obs_{h_step}'][:,sample].mean()
+        
         # Computing single metrics (mean over samples in the batch)
         accuracy_halted = (
             ((y_halted_batch > 0) == y_true_batch).to(torch.float32).mean()
         )
-
+        
+        accuracy_halted_predictive = (
+            ((y_halted_predictive > 0) == y_true_batch).to(torch.float32).mean()
+        )
+        
         metrics_single_["accuracy_halted"].append(accuracy_halted)
+        metrics_single_["accuracy_halted_predictive"].append(accuracy_halted_predictive)
         metrics_single_["halting_step"].append(halting_step.to(torch.float).mean())
 
         # Computing per step metrics (mean over samples in the batch)
@@ -94,8 +182,6 @@ def evaluate(dataloader, module):
     }
 
     return metrics_single, metrics_per_step
-
-
 
 def plot_distributions(target, predicted):
     """Create a barplot.
@@ -201,7 +287,7 @@ def main(argv=None):
     parser.add_argument(
         "--eval-frequency",
         type=int,
-        default=10_000,
+        default=10_00,
         help="Evaluation is run every `eval_frequency` steps",
     )
     parser.add_argument(
@@ -317,7 +403,7 @@ def main(argv=None):
         n_hidden=args.n_hidden,
         max_steps=args.max_steps,
     )
-    guide = AutoDiagonalNormal(model)
+    guide = AutoMultivariateNormal(model, init_loc_fn=init_to_mean)
     # module = module.to(device, dtype)
 
     # loss_reg_inst = RegularizationLoss(
@@ -346,22 +432,18 @@ def main(argv=None):
 
             loss = svi.step(x_batch, y_true_batch)
            
-           
+            writer.add_scalar(
+                            "training/epoch{epoch}/loss",
+                            loss, # print(loss)
+                            step
+                        )
             # # Evaluation
             if step % args.eval_frequency == 0:
-                writer.add_scalar(
-                            "training/loss",
-                            loss, # print(loss)
-
-                            (epoch+1)*step,
-                        )
+                
                 model.eval()
 
                 for dataloader_name, dataloader in eval_dataloaders.items():
-                    metrics_single, metrics_per_step = evaluate(
-                        dataloader,
-                        model,
-                    )
+                    metrics_single, metrics_per_step = evaluate(dataloader,model,guide)
                     # fig_dist = plot_distributions(
                     #     loss_reg_inst.p_g.cpu().numpy(),
                     #     metrics_per_step["p"],
@@ -373,9 +455,9 @@ def main(argv=None):
 
                     for metric_name, metric_value in metrics_single.items():
                         writer.add_scalar(
-                            f"{metric_name}/{dataloader_name}",
+                            f"{metric_name}/epoch{epoch}/{dataloader_name}",
                             metric_value,
-                            (epoch+1)*step,
+                            step,
                         )
 
                 torch.save(model, log_folder / "checkpoint.pth")

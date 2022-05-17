@@ -1,3 +1,4 @@
+from math import inf
 import torch
 import torch.nn as nn
 import pyro.poutine as poutine
@@ -91,7 +92,7 @@ class RegularizationLoss(nn.Module):
         steps, batch_size = p.shape
 
         p = p.transpose(0, 1)  # (batch_size, max_steps)
-
+        p = p + torch.finfo(torch.float32).eps
         p_g_batch = self.p_g[None, :steps].expand_as(p)  # (batch_size, max_steps)
 
         return self.kl_div(p.log(), p_g_batch)
@@ -99,7 +100,6 @@ class RegularizationLoss(nn.Module):
 
 
 def custom_loss(model, guide, *args, **kwargs):
-    print(args)
     guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(
         *args, **kwargs
@@ -129,6 +129,6 @@ def custom_loss(model, guide, *args, **kwargs):
                 score = site["fn"].log_prob(site["value"])
             elbo -= score.mean()
 
-    # reg_loss = model.loss_reg_inst(p) * model.beta
-    reg_loss = 0.0
+    reg_loss = model.loss_reg_inst(p) * model.beta
+    # reg_loss = 0.0
     return -elbo + reg_loss
