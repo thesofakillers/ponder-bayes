@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import pyro.poutine as poutine
 
+
 class ReconstructionLoss(nn.Module):
     """Weighted average of per step losses.
 
@@ -96,7 +97,6 @@ class RegularizationLoss(nn.Module):
         p_g_batch = self.p_g[None, :steps].expand_as(p)  # (batch_size, max_steps)
 
         return self.kl_div(p.log(), p_g_batch)
-
 
 
 def custom_loss(model, guide, *args, **kwargs):
