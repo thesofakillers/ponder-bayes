@@ -420,7 +420,7 @@ def main(argv=None):
     # ).to(device, dtype)
 
     # Optimizer
-    adam = pyro.optim.ClippedAdam({"lr": 0.03, "clip_norm": 1.0})
+    adam = pyro.optim.ClippedAdam({"lr": 0.0003, "clip_norm": 1.0})
     # loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
 
     # Loss preparation
