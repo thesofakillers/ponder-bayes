@@ -1,5 +1,5 @@
 set -x 
-SEED=$RANDOM
+SEED=420
 
 python train_older.py \
 	--batch-size 128 \
