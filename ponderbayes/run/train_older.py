@@ -144,6 +144,7 @@ def evaluate(dataloader, module, guide=None):
         predictive = Predictive(module, guide=guide, num_samples=3)
         predictions = predictive(x_batch)
         y_pred_batch, p, halting_step = module(x_batch)
+        y_pred_batch = y_pred_batch.argmax(dim=-1)
         y_halted_batch = y_pred_batch.gather(dim=0, index=halting_step[None, :] - 1,)[
             0
         ]  # (batch_size,)
@@ -151,7 +152,9 @@ def evaluate(dataloader, module, guide=None):
         y_halted_predictive = torch.zeros_like(y_halted_batch)
         for sample in range(x_batch.shape[0]):
             h_step = int(halting_step[sample])
-            y_halted_predictive[sample] = predictions[f"obs_{h_step}"][:, sample].mean()
+            y_halted_predictive[sample] = (
+                predictions[f"obs_{h_step}"][:, sample].float().mean()
+            )
 
         # Computing single metrics (mean over samples in the batch)
         accuracy_halted = (
@@ -435,7 +438,6 @@ def main(argv=None):
             y_true_batch = y_true_batch.to(device, dtype)
 
             loss = svi.step(x_batch, y_true_batch)
-
             writer.add_scalar("training/epoch{epoch}/loss", loss, step)  # print(loss)
             # # Evaluation
             if step % args.eval_frequency == 0:
