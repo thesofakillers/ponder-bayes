@@ -41,6 +41,14 @@ python-versions = ">=3.6"
 frozenlist = ">=1.1.0"
 
 [[package]]
+name = "antlr4-python3-runtime"
+version = "4.9.3"
+description = "ANTLR 4.9.3 runtime for Python 3.7"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "anyio"
 version = "3.5.0"
 description = "High level compatibility layer for multiple asynchronous event loop implementations"
@@ -378,7 +386,7 @@ python-versions = ">=3.7"
 
 [[package]]
 name = "fsspec"
-version = "2022.3.0"
+version = "2022.5.0"
 description = "File-system specification"
 category = "main"
 optional = false
@@ -480,6 +488,20 @@ six = ">=1.5.2"
 
 [package.extras]
 protobuf = ["grpcio-tools (>=1.46.0)"]
+
+[[package]]
+name = "hydra-core"
+version = "1.2.0"
+description = "A framework for elegantly configuring complex applications"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+antlr4-python3-runtime = ">=4.9.0,<4.10.0"
+importlib-resources = {version = "*", markers = "python_version < \"3.9\""}
+omegaconf = ">=2.2,<3.0"
+packaging = "*"
 
 [[package]]
 name = "idna"
@@ -1047,6 +1069,18 @@ python-versions = ">=3.6"
 rsa = ["cryptography (>=3.0.0)"]
 signals = ["blinker (>=1.4.0)"]
 signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
+
+[[package]]
+name = "omegaconf"
+version = "2.2.1"
+description = "A flexible configuration library"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+antlr4-python3-runtime = ">=4.9.0,<4.10.0"
+PyYAML = ">=5.1.0"
 
 [[package]]
 name = "opt-einsum"
@@ -1891,7 +1925,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "0795a5feac984bad9a1c85670759c4e769b4835502aaa5e826a36b0fb1ff4dcb"
+content-hash = "e4a83b568572855eca49c61b08b7070e05e0ddb1d75250508eba17338107e8b6"
 
 [metadata.files]
 absl-py = [
@@ -1975,6 +2009,9 @@ aiohttp = [
 aiosignal = [
     {file = "aiosignal-1.2.0-py3-none-any.whl", hash = "sha256:26e62109036cd181df6e6ad646f91f0dcfd05fe16d0cb924138ff2ab75d64e3a"},
     {file = "aiosignal-1.2.0.tar.gz", hash = "sha256:78ed67db6c7b7ced4f98e495e572106d5c432a93e1ddd1bf475e1dc05f5b7df2"},
+]
+antlr4-python3-runtime = [
+    {file = "antlr4-python3-runtime-4.9.3.tar.gz", hash = "sha256:f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b"},
 ]
 anyio = [
     {file = "anyio-3.5.0-py3-none-any.whl", hash = "sha256:b5fa16c5ff93fa1046f2eeb5bbff2dad4d3514d6cda61d02816dba34fa8c3c2e"},
@@ -2254,8 +2291,8 @@ frozenlist = [
     {file = "frozenlist-1.3.0.tar.gz", hash = "sha256:ce6f2ba0edb7b0c1d8976565298ad2deba6f8064d2bebb6ffce2ca896eb35b0b"},
 ]
 fsspec = [
-    {file = "fsspec-2022.3.0-py3-none-any.whl", hash = "sha256:a53491b003210fce6911dd8f2d37e20c41a27ce52a655eef11b885d1578ed4cf"},
-    {file = "fsspec-2022.3.0.tar.gz", hash = "sha256:fd582cc4aa0db5968bad9317cae513450eddd08b2193c4428d9349265a995523"},
+    {file = "fsspec-2022.5.0-py3-none-any.whl", hash = "sha256:2c198c50eb541a80bbd03540b07602c4a957366f3fb416a1f270d34bd4ff0926"},
+    {file = "fsspec-2022.5.0.tar.gz", hash = "sha256:7a5459c75c44e760fbe6a3ccb1f37e81e023cde7da8ba20401258d877ec483b4"},
 ]
 gitdb = [
     {file = "gitdb-4.0.9-py3-none-any.whl", hash = "sha256:8033ad4e853066ba6ca92050b9df2f89301b8fc8bf7e9324d412a63f8bf1a8fd"},
@@ -2328,6 +2365,10 @@ grpcio = [
     {file = "grpcio-1.46.0-cp39-cp39-win32.whl", hash = "sha256:4befe75c0122fe51ae046a4936b735c306ea63849405cd8dc0be534affd60ea0"},
     {file = "grpcio-1.46.0-cp39-cp39-win_amd64.whl", hash = "sha256:25cf4ede6f9703913b4381969159452ff6ca5dfb93d5f58b80d1763e9ad79b18"},
     {file = "grpcio-1.46.0.tar.gz", hash = "sha256:ef37ff444d248ff8ea5e175a7807ce19e324831bc00d466169191cd9aad0ee36"},
+]
+hydra-core = [
+    {file = "hydra-core-1.2.0.tar.gz", hash = "sha256:4990721ce4ac69abafaffee566d6b63a54faa6501ecce65b338d3251446ff634"},
+    {file = "hydra_core-1.2.0-py3-none-any.whl", hash = "sha256:b6614fd6d6a97a9499f7ddbef02c9dd38f2fec6a9bc83c10e248db1dae50a528"},
 ]
 idna = [
     {file = "idna-3.3-py3-none-any.whl", hash = "sha256:84d9dd047ffa80596e0f246e2eab0b391788b0503584e8945f2368256d2735ff"},
@@ -2663,6 +2704,10 @@ numpy = [
 oauthlib = [
     {file = "oauthlib-3.2.0-py3-none-any.whl", hash = "sha256:6db33440354787f9b7f3a6dbd4febf5d0f93758354060e802f6c06cb493022fe"},
     {file = "oauthlib-3.2.0.tar.gz", hash = "sha256:23a8208d75b902797ea29fd31fa80a15ed9dc2c6c16fe73f5d346f83f6fa27a2"},
+]
+omegaconf = [
+    {file = "omegaconf-2.2.1-py3-none-any.whl", hash = "sha256:5ce512b0a8996b5acddc7b30f6bffa337a4b0ada1d96b4270588365e2a69e6d5"},
+    {file = "omegaconf-2.2.1.tar.gz", hash = "sha256:6796a5b51a0112410d9940c3a5d2938d5e644377a5517c02db1aef99e03b8af2"},
 ]
 opt-einsum = [
     {file = "opt_einsum-3.3.0-py3-none-any.whl", hash = "sha256:2455e59e3947d3c275477df7f5205b30635e266fe6dc300e3d9f9646bfcea147"},
