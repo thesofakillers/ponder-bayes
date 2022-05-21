@@ -78,11 +78,13 @@ class PonderBayes(pl.LightningModule):
         ).to(torch.float32)
 
         self.output_layer.weight = PyroSample(
-            dist.Normal(torch.Tensor([0.0]), torch.Tensor([10.0]))
+            dist.Normal(torch.Tensor([0.0]), torch.Tensor([0.1]))
             .expand([1, n_hidden])
             .to_event(2)
         )
-        self.output_layer.bias = PyroSample(dist.Normal(0.0, 10).expand([1]).to_event(1))
+        self.output_layer.bias = PyroSample(
+            dist.Normal(0.0, 10).expand([1]).to_event(1)
+        )
 
         self.save_hyperparameters()
 
@@ -137,7 +139,7 @@ class PonderBayes(pl.LightningModule):
                 lambda_n = torch.sigmoid(self.lambda_layer(h))[:, 0]  # (batch_size,)
 
             # Store releavant outputs
-            y_list.append(self.output_layer(h)[:, 0])  # (batch_size,)
+            y_list.append(self.output_layer(h))  # (batch_size,)
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
 
             # print(lambda_n)
@@ -158,13 +160,13 @@ class PonderBayes(pl.LightningModule):
         y = torch.stack(y_list)
         p = torch.stack(p_list)
 
-        for n in range(self.max_steps):
+        for step in range(self.max_steps):
             # sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
-            sigma = pyro.sample(f"sigma_{n}", dist.Gamma(.5, 1))
+            # sigma = pyro.sample(f"sigma_{n}", dist.Gamma(0.5, 1))
 
-            mean = y[n]
-            with pyro.plate(f"data_{n}", x.shape[0]):
-                obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)
+            with pyro.plate(f"data_{step}", x.shape[0]):
+                yhat = nn.functional.softmax(y[step], dim=0)
+                obs = pyro.sample(f"obs_{step}", dist.Categorical(yhat), obs=y_true)
 
         return y, p, halting_step
 
@@ -184,22 +186,6 @@ class PonderBayes(pl.LightningModule):
             y_pred_batch, y_true_batch, threshold=0, dim=1
         )
         return accuracy_halted_step, accuracy_all_steps
-
-    def _loss_step(self, p, y_pred_batch, y_true_batch):
-        """computes the loss for a given batch"""
-        # reconstruction loss
-        loss_rec = self.loss_rec_inst(
-            p,
-            y_pred_batch,
-            y_true_batch,
-        )
-        # regularization loss
-        loss_reg = self.loss_reg_inst(
-            p,
-        )
-        # overall loss
-        loss_overall = loss_rec + self.beta * loss_reg
-        return loss_rec, loss_reg, loss_overall
 
     def _shared_step(self, batch, batch_idx, phase):
         """runs forward, computes accuracy and loss and logs"""
@@ -276,5 +262,5 @@ class PonderBayes(pl.LightningModule):
 
     def configure_optimizers(self):
         """Handles optimizers and schedulers"""
-        optimizer = pyro.optim.Adam({"lr": self.lr})
+        optimizer = pyro.optim.ClippedAdam({"lr": self.lr, "clip_norm": 1.0})
         return optimizer

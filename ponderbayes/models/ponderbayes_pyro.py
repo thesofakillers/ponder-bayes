@@ -79,7 +79,7 @@ class PonderBayes(PyroModule):
         ).to(torch.float32)
 
         self.output_layer.weight = PyroSample(
-            dist.Normal(torch.Tensor([0.0]), torch.Tensor([0.1]))
+            dist.Normal(torch.Tensor([0.0]), torch.Tensor([1]))
             .expand([2, n_hidden])
             .to_event(2)
         )
