@@ -65,18 +65,18 @@ class ParityDataset(Dataset):
     def __len__(self) -> int:
         return self.n_samples
 
-    def _generate_parity_sample(self, x, generator):
+    def _generate_parity_sample(self, x, generator, idx):
         """
         x : torch.Tensor
-            vector of 0s, of any length
         """
         sample_length = len(x)
-        n_non_zero: int = torch.randint(
-            low=self.n_nonzero_min,
-            high=self.n_nonzero_max + 1,
-            size=(1,),
-            generator=generator,
-        ).item()
+        n_non_zero = idx % self.n_nonzero_max
+        # n_non_zero: int = torch.randint(
+        #     low=self.n_nonzero_min,
+        #     high=self.n_nonzero_max + 1,
+        #     size=(1,),
+        #     generator=generator,
+        # ).item()
         # set the first n_non_zero elements to random values of either 1 or -1
         output = x.clone()
         output[:n_non_zero] = (
@@ -89,10 +89,10 @@ class ParityDataset(Dataset):
         y = (output == 1.0).sum() % 2
         return output, y
 
-    def _get_interpolation_item(self, generator):
+    def _get_interpolation_item(self, generator, idx):
         # initialize vector of 0s
         x = torch.zeros((self.n_elems,))
-        return self._generate_parity_sample(x, generator)
+        return self._generate_parity_sample(x, generator, idx)
 
     def _get_extrapolation_item(self, generator):
         if self.split == "train":
@@ -127,6 +127,6 @@ class ParityDataset(Dataset):
             idx + split_to_multiplier[self.split] * self.n_samples
         )
         if self.mode == "interpolation":
-            return self._get_interpolation_item(generator)
+            return self._get_interpolation_item(generator, idx)
         elif self.mode == "extrapolation":
             return self._get_extrapolation_item(generator)

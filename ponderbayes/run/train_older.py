@@ -18,7 +18,7 @@ import pyro
 from pyro.infer import SVI, Trace_ELBO, Predictive
 import pyro.poutine as poutine
 
-from ponderbayes.models.ponderbayes_pyro import PonderBayes
+from ponderbayes.models.ponderbayes_pyro import PonderBayes, MyGuide
 
 from ponderbayes.data.datasets import ParityDataset
 from ponderbayes.models.losses import custom_loss
@@ -410,6 +410,7 @@ def main(argv=None):
         n_hidden=args.n_hidden,
         max_steps=args.max_steps,
     )
+    # guide = MyGuide(model)
     guide = AutoMultivariateNormal(model, init_loc_fn=init_to_mean)
     # module = module.to(device, dtype)
 
@@ -419,7 +420,7 @@ def main(argv=None):
     # ).to(device, dtype)
 
     # Optimizer
-    adam = pyro.optim.Adam({"lr": 0.03})
+    adam = pyro.optim.ClippedAdam({"lr": 0.03, "clip_norm": 1.0})
     # loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
 
     # Loss preparation
@@ -439,6 +440,8 @@ def main(argv=None):
 
             loss = svi.step(x_batch, y_true_batch)
             writer.add_scalar("training/epoch{epoch}/loss", loss, step)  # print(loss)
+            iterator.set_postfix({"loss": loss})
+
             # # Evaluation
             if step % args.eval_frequency == 0:
 

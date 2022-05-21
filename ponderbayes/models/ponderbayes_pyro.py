@@ -79,7 +79,7 @@ class PonderBayes(PyroModule):
         ).to(torch.float32)
 
         self.output_layer.weight = PyroSample(
-            dist.Normal(torch.Tensor([0.0]), torch.Tensor([10.0]))
+            dist.Normal(torch.Tensor([0.0]), torch.Tensor([0.1]))
             .expand([2, n_hidden])
             .to_event(2)
         )
@@ -166,6 +166,31 @@ class PonderBayes(PyroModule):
 
             with pyro.plate(f"data_{step}", x.shape[0]):
                 yhat = nn.functional.softmax(y[step], dim=0)
-                # print(yhat)
                 obs = pyro.sample(f"obs_{step}", dist.Categorical(yhat), obs=y_true)
         return y, p, halting_step
+
+
+class MyGuide(PyroModule):
+    def __init__(self, n_input):
+        super().__init__()
+        # Let's point estimate sigma.
+
+        self.n_hidden = n_input.n_hidden
+        self.weights_loc = PyroParam(torch.tensor(0.0))
+        self.weights_scale = PyroParam(
+            torch.tensor(10.0), constraint=constraints.positive
+        )
+        self.bias_loc = PyroParam(torch.tensor(0.0))
+        self.bias_scale = PyroParam(torch.tensor(10.0), constraint=constraints.positive)
+
+    def forward(self, x, y=None):
+        pyro.sample(
+            "output_layer.weight",
+            dist.Normal(self.weights_loc, self.weights_scale)
+            .expand([self.n_hidden, 2])
+            .to_event(2),
+        )
+        pyro.sample(
+            "output_layer.bias",
+            dist.Normal(self.bias_loc, self.bias_scale).expand([2]).to_event(1),
+        )
