@@ -9,14 +9,16 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from pyro.infer.autoguide import AutoDiagonalNormal, AutoMultivariateNormal, init_to_mean
+from pyro.infer.autoguide import (
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    init_to_mean,
+)
 import pyro
 from pyro.infer import SVI, Trace_ELBO, Predictive
 import pyro.poutine as poutine
 
-from ponderbayes.models.ponderbayes import (
-    PonderBayes
-)
+from ponderbayes.models.ponderbayes_pyro import PonderBayes
 
 from ponderbayes.data.datasets import ParityDataset
 from ponderbayes.models.losses import custom_loss
@@ -95,8 +97,9 @@ from ponderbayes.models.losses import custom_loss
 
 #     return metrics_single, metrics_per_step
 
+
 @torch.no_grad()
-def evaluate(dataloader, module,guide=None):
+def evaluate(dataloader, module, guide=None):
     """Compute relevant metrics.
 
     Parameters
@@ -148,17 +151,17 @@ def evaluate(dataloader, module,guide=None):
         y_halted_predictive = torch.zeros_like(y_halted_batch)
         for sample in range(x_batch.shape[0]):
             h_step = int(halting_step[sample])
-            y_halted_predictive[sample] = predictions[f'obs_{h_step}'][:,sample].mean()
-        
+            y_halted_predictive[sample] = predictions[f"obs_{h_step}"][:, sample].mean()
+
         # Computing single metrics (mean over samples in the batch)
         accuracy_halted = (
             ((y_halted_batch > 0) == y_true_batch).to(torch.float32).mean()
         )
-        
+
         accuracy_halted_predictive = (
             ((y_halted_predictive > 0) == y_true_batch).to(torch.float32).mean()
         )
-        
+
         metrics_single_["accuracy_halted"].append(accuracy_halted)
         metrics_single_["accuracy_halted_predictive"].append(accuracy_halted_predictive)
         metrics_single_["halting_step"].append(halting_step.to(torch.float).mean())
@@ -182,6 +185,7 @@ def evaluate(dataloader, module,guide=None):
     }
 
     return metrics_single, metrics_per_step
+
 
 def plot_distributions(target, predicted):
     """Create a barplot.
@@ -423,7 +427,7 @@ def main(argv=None):
 
     # Training and evaluation loops
     pyro.clear_param_store()
-    
+
     for epoch in range(12):
         iterator = tqdm(enumerate(dataloader_train), total=args.n_iter)
         for step, (x_batch, y_true_batch) in iterator:
@@ -431,19 +435,17 @@ def main(argv=None):
             y_true_batch = y_true_batch.to(device, dtype)
 
             loss = svi.step(x_batch, y_true_batch)
-           
-            writer.add_scalar(
-                            "training/epoch{epoch}/loss",
-                            loss, # print(loss)
-                            step
-                        )
+
+            writer.add_scalar("training/epoch{epoch}/loss", loss, step)  # print(loss)
             # # Evaluation
             if step % args.eval_frequency == 0:
-                
+
                 model.eval()
 
                 for dataloader_name, dataloader in eval_dataloaders.items():
-                    metrics_single, metrics_per_step = evaluate(dataloader,model,guide)
+                    metrics_single, metrics_per_step = evaluate(
+                        dataloader, model, guide
+                    )
                     # fig_dist = plot_distributions(
                     #     loss_reg_inst.p_g.cpu().numpy(),
                     #     metrics_per_step["p"],
@@ -451,7 +453,9 @@ def main(argv=None):
                     # writer.add_figure(f"distributions/{dataloader_name}", fig_dist, step)
 
                     fig_acc = plot_accuracy(metrics_per_step["accuracy"])
-                    writer.add_figure(f"accuracy_per_step/{dataloader_name}", fig_acc, step)
+                    writer.add_figure(
+                        f"accuracy_per_step/{dataloader_name}", fig_acc, step
+                    )
 
                     for metric_name, metric_value in metrics_single.items():
                         writer.add_scalar(
