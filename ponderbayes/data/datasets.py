@@ -19,16 +19,14 @@ class ParityDataset(Dataset):
         Number of samples to generate.
     n_elems : int
         Size of the vectors.
-        In the case of extrapolation, this defines the
-        maximum size of the training vectors, i.e.
-        one less than the minimum size of the testing vectors
     mode : str, default "interpolation"
         whether to generate a dataset for interpolation or for extrapolation
     split : str, default "train"
         whether to generate the train, validation or test split
     n_nonzero_min, n_nonzero_max : int or None
         Minimum (inclusive) and maximum (inclusive) number of nonzero
-        elements in the feature vector. If not specified then `(1, n_elem)`.
+        elements in the training feature vectors.
+        If not specified then `(1, n_elem)`.
     """
 
     def __init__(
@@ -65,18 +63,13 @@ class ParityDataset(Dataset):
     def __len__(self) -> int:
         return self.n_samples
 
-    def _generate_parity_sample(self, x, generator):
+    def _generate_parity_sample(self, x, generator, idx):
         """
         x : torch.Tensor
             vector of 0s, of any length
         """
-        sample_length = len(x)
-        n_non_zero: int = torch.randint(
-            low=self.n_nonzero_min,
-            high=self.n_nonzero_max + 1,
-            size=(1,),
-            generator=generator,
-        ).item()
+        # consistently sample a different difficulty
+        n_non_zero = idx % self.n_nonzero_max
         # set the first n_non_zero elements to random values of either 1 or -1
         output = x.clone()
         output[:n_non_zero] = (
@@ -84,15 +77,15 @@ class ParityDataset(Dataset):
             - 1
         )
         # randomly permute the vector so that the non-zero elements are mixed
-        output = output[torch.randperm(n=sample_length, generator=generator)]
+        output = output[torch.randperm(n=self.n_elems, generator=generator)]
         # generate the label
         y = (torch.abs(output) == 1.0).sum() % 2
         return output, y
 
-    def _get_interpolation_item(self, generator):
+    def _get_interpolation_item(self, generator, idx):
         # initialize vector of 0s
         x = torch.zeros((self.n_elems,))
-        return self._generate_parity_sample(x, generator)
+        return self._generate_parity_sample(x, generator, idx)
 
     def _get_extrapolation_item(self, generator):
         if self.split == "train":
@@ -127,6 +120,6 @@ class ParityDataset(Dataset):
             idx + split_to_multiplier[self.split] * self.n_samples
         )
         if self.mode == "interpolation":
-            return self._get_interpolation_item(generator)
+            return self._get_interpolation_item(generator, idx)
         elif self.mode == "extrapolation":
             return self._get_extrapolation_item(generator)
