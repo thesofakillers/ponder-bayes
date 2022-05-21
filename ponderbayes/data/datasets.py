@@ -86,7 +86,7 @@ class ParityDataset(Dataset):
         # randomly permute the vector so that the non-zero elements are mixed
         output = output[torch.randperm(n=sample_length, generator=generator)]
         # generate the label
-        y = (output == 1.0).sum() % 2
+        y = (torch.abs(output) == 1.0).sum() % 2
         return output, y
 
     def _get_interpolation_item(self, generator):
