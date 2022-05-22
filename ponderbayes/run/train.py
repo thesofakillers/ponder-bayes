@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--lambda-p",
         type=float,
-        default=0.4,
+        default=0.1,
         help="Geometric prior distribution hyperparameter",
     )
     parser.add_argument(
