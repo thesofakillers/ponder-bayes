@@ -2,7 +2,7 @@
 
 #SBATCH --partition=gpu_shared_course
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=Inter
+#SBATCH --job-name=Extrap
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
 #SBATCH --time=04:00:00
