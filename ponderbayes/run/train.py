@@ -115,8 +115,8 @@ if __name__ == "__main__":
     # model instantiation
     if args.model == "pondernet":
         model_class = models.pondernet.PonderNet
-    elif args.model == 'ponderbayes':
-        model_class = models.ponderbayes.PonderBayes
+    elif args.model == "ponderbayes":
+        model_class = models.ponderbayes.PtlWrapper
     else:
         raise ValueError("Invalid `model` arg passed")
     if args.checkpoint:

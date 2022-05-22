@@ -17,10 +17,10 @@ from pyro.optim import Adam
 from pyro.infer.autoguide import AutoDiagonalNormal
 
 from ponderbayes.utils import metrics
-from ponderbayes.models import losses
+from ponderbayes.models import losses, ponderbayes_pyro
 
 
-class PonderBayes(pl.LightningModule):
+class PtlWrapper(pl.LightningModule):
     """Network that ponders.
     Parameters
     ----------
@@ -65,110 +65,32 @@ class PonderBayes(pl.LightningModule):
         self.lambda_p = lambda_p
         self.lr = lr
 
-        self.cell = nn.GRUCell(n_elems, n_hidden)
-        self.output_layer = PyroModule[nn.Linear](n_hidden, 1)
-        self.lambda_layer = nn.Linear(n_hidden, 1)
+        self.net = ponderbayes_pyro.PonderBayes(
+            self.n_elems,
+            self.n_hidden,
+            self.max_steps,
+            self.allow_halting,
+            self.beta,
+            self.lambda_p,
+        )
 
         # necessary for Bayesian Inference
         self.automatic_optimization = False
-        self.guide = AutoDiagonalNormal(self)
+        self.guide = AutoDiagonalNormal(self.net)
 
         self.loss_reg_inst = losses.RegularizationLoss(
             lambda_p=self.lambda_p, max_steps=self.max_steps
         ).to(torch.float32)
 
-        self.output_layer.weight = PyroSample(
-            dist.Normal(torch.Tensor([0.0]), torch.Tensor([0.1]))
-            .expand([1, n_hidden])
-            .to_event(2)
-        )
-        self.output_layer.bias = PyroSample(
-            dist.Normal(0.0, 10).expand([1]).to_event(1)
-        )
-
         self.save_hyperparameters()
 
     def on_train_start(self):
         pyro.clear_param_store()
-        opt = self.optimizers()
-        self.svi = SVI(self, self.guide, opt, loss=losses.custom_loss)
+        opt = pyro.optim.ClippedAdam({"lr": self.lr, "clip_norm": 1.0})
+        self.svi = SVI(self.net, self.guide, opt, loss=losses.custom_loss)
 
     def forward(self, x, y_true=None):
-        """Run forward pass.
-        Parameters
-        ----------
-        x : torch.Tensor
-            Batch of input features of shape `(batch_size, n_elems)`.
-        Returns
-        -------
-        y : torch.Tensor
-            Tensor of shape `(max_steps, batch_size)` representing
-            the predictions for each step and each sample. In case
-            `allow_halting=True` then the shape is
-            `(steps, batch_size)` where `1 <= steps <= max_steps`.
-        p : torch.Tensor
-            Tensor of shape `(max_steps, batch_size)` representing
-            the halting probabilities. Sums over rows (fixing a sample)
-            are 1. In case `allow_halting=True` then the shape is
-            `(steps, batch_size)` where `1 <= steps <= max_steps`.
-        halting_step : torch.Tensor
-            An integer for each sample in the batch that corresponds to
-            the step when it was halted. The shape is `(batch_size,)`. The
-            minimal value is 1 because we always run at least one step.
-        """
-        batch_size, _ = x.shape
-        device = x.device
-
-        h = x.new_zeros(batch_size, self.n_hidden)
-
-        un_halted_prob = x.new_ones(batch_size)
-
-        y_list = []
-        p_list = []
-
-        halting_step = torch.zeros(
-            batch_size,
-            dtype=torch.long,
-            device=device,
-        )
-
-        for n in range(1, self.max_steps + 1):
-            if n == self.max_steps:
-                lambda_n = x.new_ones(batch_size)  # (batch_size,)
-            else:
-                lambda_n = torch.sigmoid(self.lambda_layer(h))[:, 0]  # (batch_size,)
-
-            # Store releavant outputs
-            y_list.append(self.output_layer(h))  # (batch_size,)
-            p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
-
-            # print(lambda_n)
-
-            halting_step = torch.maximum(
-                n * (halting_step == 0) * torch.bernoulli(lambda_n).to(torch.long),
-                halting_step,
-            )
-
-            # Prepare for next iteration
-            un_halted_prob = un_halted_prob * (1 - lambda_n)
-            h = self.cell(x, h)
-
-            # Potentially stop if all samples halted
-            if self.allow_halting and (halting_step > 0).sum() == batch_size:
-                break
-
-        y = torch.stack(y_list)
-        p = torch.stack(p_list)
-
-        for step in range(self.max_steps):
-            # sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
-            # sigma = pyro.sample(f"sigma_{n}", dist.Gamma(0.5, 1))
-
-            with pyro.plate(f"data_{step}", x.shape[0]):
-                yhat = nn.functional.softmax(y[step], dim=0)
-                obs = pyro.sample(f"obs_{step}", dist.Categorical(yhat), obs=y_true)
-
-        return y, p, halting_step
+        return self.net(x, y_true)
 
     def _accuracy_step(self, y_pred_batch, y_true_batch, halting_step):
         """computes accuracy metrics for a given batch"""
@@ -187,13 +109,14 @@ class PonderBayes(pl.LightningModule):
         )
         return accuracy_halted_step, accuracy_all_steps
 
-    def _shared_step(self, batch, batch_idx, phase):
+    def training_step(self, batch, batch_idx):
         """runs forward, computes accuracy and loss and logs"""
         # (batch_size, n_elems), (batch_size,)
         x, y_true_batch = batch
         y_true = y_true_batch.double()
 
         loss = self.svi.step(x, y_true)
+        print("did forward")
         # , y_pred_batch, p, halting_step
         print(loss)
 
@@ -232,14 +155,11 @@ class PonderBayes(pl.LightningModule):
         # needed for backward
         return results
 
-    def training_step(self, batch, batch_idx):
-        return self._shared_step(batch, batch_idx, "train")
-
     def validation_step(self, batch, batch_idx):
-        return self._shared_step(batch, batch_idx, "val")
+        return torch.rand(len(batch))
 
     def test_step(self, batch, batch_idx):
-        return self._shared_step(batch, batch_idx, "test")
+        return torch.rand(len(batch))
 
     def _shared_epoch_end(self, outputs, phase):
         """Accumulates and logs per-step metrics at the end of the epoch"""
@@ -262,5 +182,5 @@ class PonderBayes(pl.LightningModule):
 
     def configure_optimizers(self):
         """Handles optimizers and schedulers"""
-        optimizer = pyro.optim.ClippedAdam({"lr": self.lr, "clip_norm": 1.0})
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer

@@ -100,6 +100,7 @@ class RegularizationLoss(nn.Module):
 
 
 def custom_loss(model, guide, *args, **kwargs):
+
     guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(
         *args, **kwargs
@@ -107,8 +108,6 @@ def custom_loss(model, guide, *args, **kwargs):
 
     elbo = 0.0
     y, p, halting_step = model_trace.nodes["_RETURN"]["value"]
-
-    # print(model_trace.nodes)
 
     # We are interested in obs_step and output layer weights and biases
     for site in model_trace.nodes.values():
