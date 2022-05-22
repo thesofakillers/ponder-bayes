@@ -1,3 +1,3 @@
 from . import pondernet
-from . import ponderbayes
+from . import ptl_wrapper
 from . import losses

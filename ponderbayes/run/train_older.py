@@ -15,10 +15,9 @@ from pyro.infer.autoguide import (
     init_to_mean,
 )
 import pyro
-from pyro.infer import SVI, Trace_ELBO, Predictive
-import pyro.poutine as poutine
+from pyro.infer import SVI, Predictive
 
-from ponderbayes.models.ponderbayes_pyro import PonderBayes, MyGuide
+from ponderbayes.models.ponderbayes import PonderBayes
 
 from ponderbayes.data.datasets import ParityDataset
 from ponderbayes.models.losses import custom_loss

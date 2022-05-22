@@ -80,13 +80,6 @@ if __name__ == "__main__":
         default="interpolation",
     )
     parser.add_argument(
-        "--n-nonzero",
-        type=int,
-        nargs=2,
-        default=(None, None),
-        help="Lower and upper bound on nonzero elements in the training set",
-    )
-    parser.add_argument(
         "--batch-size",
         type=int,
         default=128,
@@ -116,7 +109,7 @@ if __name__ == "__main__":
     if args.model == "pondernet":
         model_class = models.pondernet.PonderNet
     elif args.model == "ponderbayes":
-        model_class = models.ponderbayes.PtlWrapper
+        model_class = models.ptl_wrapper.PtlWrapper
     else:
         raise ValueError("Invalid `model` arg passed")
     if args.checkpoint:
@@ -156,8 +149,6 @@ if __name__ == "__main__":
         n_eval_samples=args.n_eval_samples,
         n_elems=args.n_elems,
         mode=args.mode,
-        n_nonzero_min=args.n_nonzero[0],
-        n_nonzero_max=args.n_nonzero[1],
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )
