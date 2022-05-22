@@ -2,7 +2,7 @@
 
 #SBATCH --partition=gpu_shared_course
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=ReplPNet
+#SBATCH --job-name=InterRepl
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
 #SBATCH --time=12:00:00
@@ -19,7 +19,10 @@ srun python -u ponderbayes/run/train.py --model pondernet \
   --mode interpolation \
   --n-elems 64 \
   --n-hidden 128 \
-  --lambda-p 0.1 \
+  --lambda-p 0.4 \
   --beta 0.01 --batch-size 128 \
   --num-workers 3 \
-  --n-iter 1000000
+  --n-iter 150000 \
+  --n-train-samples 1000000 \
+  --n-eval-samples 200000 \
+  --val-check-interval 2000
