@@ -24,9 +24,6 @@ class ParityDataModule(LightningDataModule):
         one less than the minimum size of the testing vectors
     mode : str, default "interpolation"
         whether to generate a dataset for interpolation or for extrapolation
-    n_nonzero_min, n_nonzero_max : int or None
-        Minimum (inclusive) and maximum (inclusive) number of nonzero
-        elements in the feature vector. If not specified then `(1, n_elem)`.
     """
 
     def __init__(
@@ -35,8 +32,6 @@ class ParityDataModule(LightningDataModule):
         n_eval_samples,
         n_elems,
         mode,
-        n_nonzero_min,
-        n_nonzero_max,
         batch_size=64,
         num_workers=3,
     ):
@@ -49,13 +44,6 @@ class ParityDataModule(LightningDataModule):
         self.n_train_samples = n_train_samples
         self.n_eval_samples = n_eval_samples
         self.n_elems = n_elems
-
-        self.n_nonzero_min = 1 if n_nonzero_min is None else n_nonzero_min
-        self.n_nonzero_max = n_elems if n_nonzero_max is None else n_nonzero_max
-
-        assert (
-            0 <= self.n_nonzero_min <= self.n_nonzero_max <= n_elems
-        ), "`n_nonzero_min` must be less than or equal to `n_nonzero_max`"
 
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -72,25 +60,19 @@ class ParityDataModule(LightningDataModule):
                 n_elems=self.n_elems,
                 mode=self.mode,
                 split="train",
-                n_nonzero_min=self.n_nonzero_min,
-                n_nonzero_max=self.n_nonzero_max,
             )
             self.parity_val = datasets.ParityDataset(
                 n_samples=self.n_eval_samples,
                 n_elems=self.n_elems,
                 mode=self.mode,
                 split="val",
-                n_nonzero_min=self.n_nonzero_min,
-                n_nonzero_max=self.n_nonzero_max,
             )
         if stage in (None, "test"):
             self.parity_test = datasets.ParityDataset(
                 n_samples=self.n_eval_samples,
                 n_elems=self.n_elems,
                 mode=self.mode,
-                split="train",
-                n_nonzero_min=self.n_nonzero_min,
-                n_nonzero_max=self.n_nonzero_max,
+                split="test",
             )
         if stage in (None, "debug"):
             self.parity_debug = datasets.ParityDataset(
@@ -98,8 +80,6 @@ class ParityDataModule(LightningDataModule):
                 n_elems=16,
                 mode=self.mode,
                 split="val",
-                n_nonzero_min=0,
-                n_nonzero_max=8,
             )
 
     def train_dataloader(self) -> DataLoader:
