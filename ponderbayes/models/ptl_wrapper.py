@@ -117,19 +117,18 @@ class PtlWrapper(pl.LightningModule):
         y_true = y_true_batch.double()
 
         loss = self.svi.step(x, y_true)
-        print("did forward")
         # , y_pred_batch, p, halting_step
-        print(loss)
+        # print(loss)
 
         # TODO: needs fixing (victor's code?)
 
         # # (max_steps, batch_size), (max_steps, batch_size), (batch_size,)
-        y_pred_batch, p, halting_step = self(batch)
+        y_pred_batch, p, halting_step = self.net(x)
 
         # batch accuracy at the halted step, batch accuracy at each step
-        accuracy_halted_step, accuracy_all_steps = self._accuracy_step(
-            y_pred_batch, y_true_batch, halting_step
-        )
+        # accuracy_halted_step, accuracy_all_steps = self._accuracy_step(
+        #     y_pred_batch, y_true_batch, halting_step
+        # )
 
         # # reconstruction, regularization and overall loss
         # loss_rec, loss_reg, loss_overall = self._loss_step(
@@ -140,20 +139,21 @@ class PtlWrapper(pl.LightningModule):
         results = {
             "halting_step": halting_step.double().mean(),
             "p": p.mean(dim=1),
-            "accuracy_halted_step": accuracy_halted_step,
-            "accuracy_all_steps": accuracy_all_steps,
-            "loss": loss,
+            # "accuracy_halted_step": accuracy_halted_step,
+            # "accuracy_all_steps": accuracy_all_steps,
+            "loss": torch.Tensor([loss]),
         }
         # logging; p and accuracy_all_steps logged in _shared_epoch_end
         self.log_dict(
             {
-                f"{phase}/{k}": results[k]
+                f"train/{k}": results[k]
                 for k in [
                     "loss",
                     "halting_step",
-                    "accuracy_halted_step",
+                    # "accuracy_halted_step",
                 ]
-            }
+            },
+            prog_bar=True,
         )
         # needed for backward
         return results
@@ -187,6 +187,7 @@ class PtlWrapper(pl.LightningModule):
         self._shared_epoch_end(outputs, "test")
 
     def configure_optimizers(self):
-        """Handles optimizers and schedulers"""
+        """Handles optimizers and schedulers.
+        This optimizer is never used"""
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer

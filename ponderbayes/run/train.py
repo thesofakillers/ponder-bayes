@@ -142,6 +142,7 @@ if __name__ == "__main__":
         max_steps=args.n_iter,
         callbacks=callbacks,
         logger=logger,
+        num_sanity_val_steps=0,
     )
 
     parity_datamodule = datamodules.ParityDataModule(

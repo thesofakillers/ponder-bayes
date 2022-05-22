@@ -131,7 +131,6 @@ class PonderBayes(PyroModule):
             dtype=torch.long,
             device=device,
         )
-        print("start stepping")
         for n in range(1, self.max_steps + 1):
             if n == self.max_steps:
                 lambda_n = x.new_ones(batch_size)  # (batch_size,)
@@ -140,7 +139,6 @@ class PonderBayes(PyroModule):
 
             # Store releavant outputs
             y_list.append(self.output_layer(h))  # (batch_size,)
-            print("Weights:", self.output_layer.weight[:4, :4])
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
 
             # print(lambda_n)
