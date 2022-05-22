@@ -78,13 +78,6 @@ if __name__ == "__main__":
         default="interpolation",
     )
     parser.add_argument(
-        "--n-nonzero",
-        type=int,
-        nargs=2,
-        default=(None, None),
-        help="Lower and upper bound on nonzero elements in the training set",
-    )
-    parser.add_argument(
         "--batch-size",
         type=int,
         default=128,
@@ -101,6 +94,11 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Whether to use early stopping",
+    )
+    parser.add_argument(
+        "--val-check-interval",
+        type=float,
+        help="Evaluate every x amount of steps, as opposed to every epoch",
     )
     parser.add_argument(
         "--n-iter", type=int, default=100000, help="Number of training steps to use"
@@ -146,6 +144,7 @@ if __name__ == "__main__":
         callbacks=callbacks,
         logger=logger,
         gradient_clip_val=1,
+        val_check_interval=args.val_check_interval,
     )
 
     parity_datamodule = datamodules.ParityDataModule(
@@ -153,8 +152,6 @@ if __name__ == "__main__":
         n_eval_samples=args.n_eval_samples,
         n_elems=args.n_elems,
         mode=args.mode,
-        n_nonzero_min=args.n_nonzero[0],
-        n_nonzero_max=args.n_nonzero[1],
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )
