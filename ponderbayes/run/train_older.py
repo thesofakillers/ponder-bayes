@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import json
+from operator import mod
 import pathlib
 from pickletools import optimize
 
@@ -125,50 +126,71 @@ def evaluate(dataloader, module,guide=None):
 
     metrics_single_ = {
         "accuracy_halted": [],
-        "accuracy_halted_predictive": [],
+        "accuracy_halted_std": [],
         "halting_step": [],
     }
     metrics_per_step_ = {
         "accuracy": [],
         "p": [],
     }
-
+    # Define how many models we want to sample from predictive
+    num_samples = 7
+    
     for x_batch, y_true_batch in dataloader:
         x_batch = x_batch.to(device, dtype)  # (batch_size, n_elems)
         y_true_batch = y_true_batch.to(device, dtype)  # (batch_size,)
-
-        # predictive = Predictive(module, guide=guide, num_samples=3,return_sites=["_RETURN"])
-        predictive = Predictive(module, guide=guide, num_samples=3)
+        
+        # Define what we want to be returned from the predictive
+        return_sites  = [f'obs_{x}' for x in range(module.max_steps+1)] + ['_RETURN']
+        predictive = Predictive(module, guide=guide, num_samples=num_samples,return_sites=return_sites)
         predictions = predictive(x_batch)
-        y_pred_batch, p, halting_step = module(x_batch)
-        y_halted_batch = y_pred_batch.gather(dim=0, index=halting_step[None, :] - 1,)[
-            0
-        ]  # (batch_size,)
-
-        y_halted_predictive = torch.zeros_like(y_halted_batch)
-        for sample in range(x_batch.shape[0]):
-            h_step = int(halting_step[sample])
-            y_halted_predictive[sample] = predictions[f'obs_{h_step}'][:,sample].mean()
+        # y_pred_batch, p, halting_step = module(x_batch)
         
-        # Computing single metrics (mean over samples in the batch)
-        accuracy_halted = (
-            ((y_halted_batch > 0) == y_true_batch).to(torch.float32).mean()
-        )
+        # Separate p which is the probabilities of all steps and the
+        # halting step which is the step at which the model halted
+        p = predictions['_RETURN'][:,:module.max_steps,:].mean(dim=0)
+        halting_step = predictions['_RETURN'][:,module.max_steps,:].to(int)
         
-        accuracy_halted_predictive = (
-            ((y_halted_predictive > 0) == y_true_batch).to(torch.float32).mean()
-        )
+        # From the observations collect the prediction of the model at the halting step
+        y_pred_batch = torch.zeros([num_samples,module.max_steps,x_batch.shape[0]])
+        for obs_n in range(module.max_steps):
+            y_pred_batch[:,obs_n,:] = predictions[f'obs_{obs_n}']
+            
+        y_halted_batch = torch.zeros([num_samples,x_batch.shape[0]])
+        y_halted_batch = torch.zeros([num_samples,x_batch.shape[0]])
+        accuracy_halted = torch.zeros([num_samples])
+        accuracy = torch.zeros([num_samples, module.max_steps])
+        for i in range(num_samples):
+            y_halted_batch[i] = y_pred_batch[i].gather(dim=0, index=halting_step[i, None, :] - 1,)[
+                0
+            ]  # (batch_size,)
         
-        metrics_single_["accuracy_halted"].append(accuracy_halted)
-        metrics_single_["accuracy_halted_predictive"].append(accuracy_halted_predictive)
+        # y_halted_predictive = torch.zeros_like(y_halted_batch)
+        # for i in range(num_samples):
+        #     for sample in range(x_batch.shape[0]):
+        #         h_step = int(halting_step[i][sample])
+        #         y_halted_predictive.append(predictions[f'obs_{h_step}'][:,sample])
+            
+            # Computing single metrics (mean over samples in the batch)
+            accuracy_halted[i] = (
+                ((y_halted_batch[i] > 0) == y_true_batch).to(torch.float32).mean()
+            )
+        
+        
+        # accuracy_halted_predictive = (
+        #     ((y_halted_predictive > 0) == y_true_batch).to(torch.float32).mean()
+        # )
+            # Computing per step metrics (mean over samples in the batch)
+            accuracy[i,:] = (
+                ((y_pred_batch[i] > 0) == y_true_batch[None, :]).to(torch.float32).mean(dim=1)
+            )
+        metrics_single_["accuracy_halted"].append(accuracy_halted.mean())
+        metrics_single_["accuracy_halted_std"].append(accuracy_halted.std())
         metrics_single_["halting_step"].append(halting_step.to(torch.float).mean())
 
-        # Computing per step metrics (mean over samples in the batch)
-        accuracy = (
-            ((y_pred_batch > 0) == y_true_batch[None, :]).to(torch.float32).mean(dim=1)
-        )
+        
 
-        metrics_per_step_["accuracy"].append(accuracy)
+        metrics_per_step_["accuracy"].append(accuracy.mean(dim=0))
         metrics_per_step_["p"].append(p.mean(dim=1))
 
     metrics_single = {
@@ -287,7 +309,7 @@ def main(argv=None):
     parser.add_argument(
         "--eval-frequency",
         type=int,
-        default=10_00,
+        default=10_000,
         help="Evaluation is run every `eval_frequency` steps",
     )
     parser.add_argument(

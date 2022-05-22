@@ -161,9 +161,12 @@ class PonderBayes(PyroModule):
         for n in range(self.max_steps):
             # sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
             sigma = pyro.sample(f"sigma_{n}", dist.Gamma(.5, 1))
-
             mean = y[n]
+
             with pyro.plate(f"data_{n}", x.shape[0]):
                 obs = pyro.sample(f"obs_{n}", dist.Normal(mean, sigma), obs=y_true)
 
-        return y, p, halting_step
+        # return y, p, halting_step
+        # Concatinate the outputs p [max_steps,num_inputs] 
+        # and halting step [1,num_inputs] into the same tensor
+        return torch.cat([p,halting_step.unsqueeze(0)])
