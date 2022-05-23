@@ -134,7 +134,7 @@ if __name__ == "__main__":
         stop_cb = pl.callbacks.EarlyStopping(**cb_config)
         callbacks.append(stop_cb)
     logger = pl.loggers.TensorBoardLogger(
-        save_dir="models", name=f"{args.model}_{args.mode}"
+        save_dir="models", name=f"{args.model}_{args.mode}_{args.n_elems}"
     )
     trainer = pl.Trainer(
         devices="auto",
