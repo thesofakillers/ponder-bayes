@@ -107,7 +107,8 @@ def custom_loss(model, guide, *args, **kwargs):
     )
 
     elbo = 0.0
-    y, p, halting_step = model_trace.nodes["_RETURN"]["value"]
+    # P is only the first max_steps rows returned values
+    p = model_trace.nodes["_RETURN"]["value"][:model.max_steps]
 
     # We are interested in obs_step and output layer weights and biases
     for site in model_trace.nodes.values():
@@ -115,7 +116,7 @@ def custom_loss(model, guide, *args, **kwargs):
             if "obs" in site["name"]:
                 step = int(site["name"].split("_")[-1])
                 score = site["fn"].log_prob(site["value"]) * p[step]
-            else:
+            elif "halt" not in site["name"]:
                 score = site["fn"].log_prob(site["value"])
             elbo += score.mean()
 
