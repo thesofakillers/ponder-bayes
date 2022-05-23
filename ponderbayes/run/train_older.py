@@ -97,7 +97,7 @@ from ponderbayes.models.losses import custom_loss
 #     return metrics_single, metrics_per_step
 
 @torch.no_grad()
-def evaluate(dataloader, module,guide=None):
+def evaluate(dataloader, module, guide=None):
     """Compute relevant metrics.
 
     Parameters
@@ -142,7 +142,7 @@ def evaluate(dataloader, module,guide=None):
         
         # Define what we want to be returned from the predictive
         return_sites  = [f'obs_{x}' for x in range(module.max_steps+1)] + ['_RETURN']
-        predictive = Predictive(module, guide=guide, num_samples=num_samples,return_sites=return_sites)
+        predictive = Predictive(module, guide=guide, num_samples=num_samples, return_sites=return_sites)
         predictions = predictive(x_batch)
         # y_pred_batch, p, halting_step = module(x_batch)
         
@@ -150,7 +150,9 @@ def evaluate(dataloader, module,guide=None):
         # halting step which is the step at which the model halted
         p = predictions['_RETURN'][:,:module.max_steps,:].mean(dim=0)
         halting_step = predictions['_RETURN'][:,module.max_steps,:].to(int)
-        
+        p, halting_step = torch.split(predictions['_RETURN'], module.max_steps, dim=1)
+        p = p.mean(dim=0)
+        halting_step = halting_step.to(int).squeeze()
         # From the observations collect the prediction of the model at the halting step
         y_pred_batch = torch.zeros([num_samples,module.max_steps,x_batch.shape[0]])
         for obs_n in range(module.max_steps):
@@ -384,8 +386,10 @@ def main(argv=None):
         ParityDataset(
             n_samples=args.batch_size * args.n_iter,
             n_elems=args.n_elems,
-            n_nonzero_min=args.n_nonzero[0],
-            n_nonzero_max=args.n_nonzero[1],
+            mode='interpolation',
+            split='train',
+            # n_nonzero_min=args.n_nonzero[0],
+            # n_nonzero_max=args.n_nonzero[1],
         ),
         batch_size=args.batch_size,
     )  # consider specifying `num_workers` for speedups
@@ -394,8 +398,8 @@ def main(argv=None):
             ParityDataset(
                 n_samples=n_eval_samples,
                 n_elems=args.n_elems,
-                n_nonzero_min=args.n_nonzero[0],
-                n_nonzero_max=args.n_nonzero[1],
+                mode='interpolation',
+                split='val',
             ),
             batch_size=batch_size_eval,
         ),
@@ -403,8 +407,8 @@ def main(argv=None):
             ParityDataset(
                 n_samples=n_eval_samples,
                 n_elems=args.n_elems,
-                n_nonzero_min=range_nonzero_easy[0],
-                n_nonzero_max=range_nonzero_easy[1],
+                mode='interpolation',
+                split='val',
             ),
             batch_size=batch_size_eval,
         ),
@@ -412,8 +416,8 @@ def main(argv=None):
             ParityDataset(
                 n_samples=n_eval_samples,
                 n_elems=args.n_elems,
-                n_nonzero_min=range_nonzero_hard[0],
-                n_nonzero_max=range_nonzero_hard[1],
+                mode='interpolation',
+                split='val',
             ),
             batch_size=batch_size_eval,
         ),
