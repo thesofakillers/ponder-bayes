@@ -17,7 +17,7 @@ if __name__ == "__main__":
         help="The seed to use for random number generation",
     )
     parser.add_argument(
-        "--model", type=str, default="pondernet", help="What model variant to use"
+        "--model", type=str, default="ponderbayes", help="What model variant to use"
     )
     parser.add_argument(
         "-c",

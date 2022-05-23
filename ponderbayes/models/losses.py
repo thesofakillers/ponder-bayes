@@ -122,14 +122,9 @@ def custom_loss(model, guide, *args, **kwargs):
                 score = site["fn"].log_prob(site["value"])
             elbo += score.mean()
 
-    for site in guide_trace.nodes.values():
-        if site["type"] == "sample":
-            if "obs" in site["name"]:
-                step = int(site["name"].split("_")[-1])
-                score = site["fn"].log_prob(site["value"]) * p[step]
-            else:
-                score = site["fn"].log_prob(site["value"])
-            elbo -= score.mean()
+    logq = guide_trace.log_prob_sum()
+
+    elbo -= logq
 
     reg_loss = model.loss_reg_inst(p) * model.beta
     # reg_loss = 0.0
