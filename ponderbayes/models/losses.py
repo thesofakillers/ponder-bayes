@@ -111,6 +111,7 @@ def custom_loss(model, guide, *args, **kwargs):
     p, _halting_step = torch.split(
         model_trace.nodes["_RETURN"]["value"], model.max_steps
     )
+    device = p.device
 
     # We are interested in obs_step and output layer weights and biases
     for site in model_trace.nodes.values():
@@ -129,6 +130,7 @@ def custom_loss(model, guide, *args, **kwargs):
     y_pred_batch = torch.zeros([model.max_steps, args[0].shape[0]])
     for obs_n in range(model.max_steps):
         y_pred_batch[obs_n, :] = model_trace.nodes[f"obs_{obs_n}"]["value"]
+    y_pred_batch = y_pred_batch.to(device)
     rec_loss = model.loss_rec_inst(p, y_pred_batch, args[1])
 
     #  calculate regularization loss

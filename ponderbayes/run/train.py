@@ -20,6 +20,9 @@ if __name__ == "__main__":
         "--model", type=str, default="ponderbayes", help="What model variant to use"
     )
     parser.add_argument(
+        "--accelerator", type=str, default="auto", help="what accelerator to use"
+    )
+    parser.add_argument(
         "-c",
         "--checkpoint",
         type=str,
@@ -136,8 +139,8 @@ if __name__ == "__main__":
         save_dir="models", name=f"{args.model}_{args.mode}"
     )
     trainer = pl.Trainer(
-        devices="auto",
-        accelerator="cpu",
+        devices=1,
+        accelerator=args.accelerator,
         enable_progress_bar=args.progress_bar,
         max_steps=args.n_iter,
         callbacks=callbacks,

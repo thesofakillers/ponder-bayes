@@ -59,7 +59,7 @@ class PonderBayes(PyroModule):
         max_steps=20,
         allow_halting=False,
         beta=0.01,
-        lambda_p=0.4,
+        lambda_p=0.1,
     ):
         super().__init__()
 
@@ -90,8 +90,6 @@ class PonderBayes(PyroModule):
         self.output_layer.bias = PyroSample(
             dist.Normal(0.0, 10).expand([2]).to_event(1)
         )
-
-        # self.save_hyperparameters()
 
     def predict(self, guide, num_samples, x_batch):
         return_sites = [f"obs_{x}" for x in range(self.max_steps)] + ["_RETURN"]
@@ -146,6 +144,10 @@ class PonderBayes(PyroModule):
             dtype=torch.long,
             device=device,
         )
+        # moving the output layer to the right device if we haven't already
+        if self.output_layer.weight.device != device:
+            self.output_layer.weight = self.output_layer.weight.to(device)
+            self.output_layer.bias = self.output_layer.bias.to(device)
         for n in range(1, self.max_steps + 1):
             if n == self.max_steps:
                 lambda_n = x.new_ones(batch_size)  # (batch_size,)
@@ -155,8 +157,6 @@ class PonderBayes(PyroModule):
             # Store releavant outputs
             y_list.append(self.output_layer(h))  # (batch_size,)
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
-
-            # print(lambda_n)
 
             halting_step = torch.maximum(
                 n * (halting_step == 0) * torch.bernoulli(lambda_n).to(torch.long),
