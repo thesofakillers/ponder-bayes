@@ -5,9 +5,10 @@
 #SBATCH --job-name=InterRepl
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
-#SBATCH --time=12:00:00
+#SBATCH --time=03:00:00
 #SBATCH --mem=32000M
-#SBATCH --output=lisa/outputs/%x_%A.out
+#SBATCH --array=1-5%2
+#SBATCH --output=lisa/outputs/%x_%A_%a.out
 
 module purge
 module load 2021
@@ -15,6 +16,9 @@ module load Anaconda3/2021.05
 
 source activate ponderbayes
 
+SEEDS_FILE=./lisa/seeds.txt
+
+# comment out the final line if you only care about seed 42
 srun python -u ponderbayes/run/train.py --model pondernet \
   --mode interpolation \
   --n-elems 64 \
@@ -25,4 +29,5 @@ srun python -u ponderbayes/run/train.py --model pondernet \
   --n-iter 150000 \
   --n-train-samples 1000000 \
   --n-eval-samples 200000 \
-  --val-check-interval 2000
+  --val-check-interval 2000 \
+  $(head -$SLURM_ARRAY_TASK_ID $SEEDS_FILE | tail -1)
