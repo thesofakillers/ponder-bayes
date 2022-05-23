@@ -11,7 +11,7 @@ import pyro.poutine as poutine
 from torch.distributions import constraints
 from pyro.nn import PyroModule, PyroParam, PyroSample
 from pyro.nn.module import to_pyro_module_
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, Trace_ELBO, Predictive
 from pyro.infer.autoguide import AutoNormal, AutoMultivariateNormal, init_to_mean
 from pyro.optim import Adam
 from pyro.infer.autoguide import AutoDiagonalNormal
@@ -54,6 +54,7 @@ class PtlWrapper(pl.LightningModule):
         beta=0.01,
         lambda_p=0.4,
         lr=0.0003,
+        num_samples=7,
     ):
         super().__init__()
 
@@ -64,6 +65,7 @@ class PtlWrapper(pl.LightningModule):
         self.beta = beta
         self.lambda_p = lambda_p
         self.lr = lr
+        self.num_samples = num_samples
 
         self.net = ponderbayes.PonderBayes(
             self.n_elems,
@@ -76,7 +78,7 @@ class PtlWrapper(pl.LightningModule):
 
         # necessary for Bayesian Inference
         self.automatic_optimization = False
-        self.guide = AutoDiagonalNormal(self.net)
+        self.guide = AutoMultivariateNormal(self.net, init_loc_fn=init_to_mean)
 
         self.loss_reg_inst = losses.RegularizationLoss(
             lambda_p=self.lambda_p, max_steps=self.max_steps
@@ -92,8 +94,49 @@ class PtlWrapper(pl.LightningModule):
     def forward(self, x, y_true=None):
         return self.net(x, y_true)
 
+    def _shared_step(self, x_batch, y_true_batch):
+        # Define what we want to be returned from the predictive
+        # return_sites = [f"obs_{x}" for x in range(self.net.max_steps + 1)] + ["_RETURN"]
+        # predictive = Predictive(
+        #     self.net,
+        #     guide=self.guide,
+        #     num_samples=self.num_samples,
+        #     return_sites=return_sites,
+        # )
+        # predictions = predictive(x_batch)
+        predictions = self.net.predict(self.guide, self.num_samples, x_batch)
+
+        # Separate p which is the probabilities of all steps and the
+        # halting step which is the step at which the model halted
+        p, halting_step = torch.split(predictions["_RETURN"], self.max_steps, dim=1)
+        p = p.mean(dim=0)
+        halting_step = halting_step.to(int).squeeze()
+
+        # From the observations collect the prediction of the model at the halting step
+        y_pred_batch = torch.zeros([self.num_samples, self.max_steps, x_batch.shape[0]])
+        for obs_n in range(self.net.max_steps):
+            y_pred_batch[:, obs_n, :] = predictions[f"obs_{obs_n}"]
+
+        accuracy_halted_step = torch.zeros([self.num_samples])
+        accuracy_all_steps = torch.zeros([self.num_samples, self.max_steps])
+
+        for i in range(self.num_samples):
+            (
+                accuracy_halted_step[i],
+                accuracy_all_steps[i],
+            ) = self._accuracy_sample(y_pred_batch[i], y_true_batch, halting_step[i])
+        results = {
+            "halting_step": halting_step.double().mean(),
+            "p": p.mean(dim=1),
+            "accuracy_halted_step": accuracy_halted_step.mean(dim=0),
+            "accuracy_all_steps": accuracy_all_steps.mean(dim=0),
+            "accuracy_halted_step_std": accuracy_halted_step.std(dim=0),
+            "accuracy_all_steps_std": accuracy_all_steps.std(dim=0),
+        }
+        return results
+
     # TODO: needs fixing (victor's code?)
-    def _accuracy_step(self, y_pred_batch, y_true_batch, halting_step):
+    def _accuracy_sample(self, y_pred_batch, y_true_batch, halting_step):
         """computes accuracy metrics for a given batch"""
         # (batch_size,) the prediction where the model halted
         y_halted_batch = y_pred_batch.gather(
@@ -113,58 +156,59 @@ class PtlWrapper(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """runs forward, computes accuracy and loss and logs"""
         # (batch_size, n_elems), (batch_size,)
-        x, y_true_batch = batch
-        y_true = y_true_batch.double()
+        x_batch, y_true = batch
+        y_true = y_true.double()
 
-        loss = self.svi.step(x, y_true)
-        # , y_pred_batch, p, halting_step
-        # print(loss)
+        loss = torch.Tensor([self.svi.step(x_batch, y_true)])
+        results = self._shared_step(x_batch, y_true)
+        
+        results["loss"] = loss
 
-        # TODO: needs fixing (victor's code?)
-
-        # # (max_steps, batch_size), (max_steps, batch_size), (batch_size,)
-        y_pred_batch, p, halting_step = self.net(x)
-
-        # batch accuracy at the halted step, batch accuracy at each step
-        # accuracy_halted_step, accuracy_all_steps = self._accuracy_step(
-        #     y_pred_batch, y_true_batch, halting_step
-        # )
-
-        # # reconstruction, regularization and overall loss
-        # loss_rec, loss_reg, loss_overall = self._loss_step(
-        #     p, y_pred_batch, y_true_batch
-        # )
-
-        # collating all results
-        results = {
-            "halting_step": halting_step.double().mean(),
-            "p": p.mean(dim=1),
-            # "accuracy_halted_step": accuracy_halted_step,
-            # "accuracy_all_steps": accuracy_all_steps,
-            "loss": torch.Tensor([loss]),
-        }
-        # logging; p and accuracy_all_steps logged in _shared_epoch_end
         self.log_dict(
             {
                 f"train/{k}": results[k]
                 for k in [
                     "loss",
                     "halting_step",
-                    # "accuracy_halted_step",
+                    "accuracy_halted_step",
+                    "accuracy_halted_step_std",
                 ]
-            },
-            prog_bar=True,
+                
+                
+            }, prog_bar=True
         )
-        # needed for backward
+        return results
+
+    def _eval_step(self, batch, phase):
+        x_batch, y_true_batch = batch
+        y_true_batch = y_true_batch.double()
+
+        loss = self.svi.evaluate_loss(x_batch, y_true_batch)
+
+        results = self._shared_step(x_batch, y_true_batch)
+
+        results["loss"] = loss
+
+        self.log_dict(
+            {
+                f"{phase}/{k}": results[k]
+                for k in [
+                    "loss",
+                    "halting_step",
+                    "accuracy_halted_step",
+                    "accuracy_halted_step_std",
+                ]
+            }
+        )
         return results
 
     def validation_step(self, batch, batch_idx):
         # TODO: figure this val step (victor's code?)
-        return torch.rand(len(batch))
+        return self._eval_step(batch, "val")
 
     def test_step(self, batch, batch_idx):
         # TODO: figure this test step (victor's code?)
-        return torch.rand(len(batch))
+        return self._eval_step(batch, "test")
 
     # TODO: needs fixing (victor's code?)
     def _shared_epoch_end(self, outputs, phase):
@@ -172,9 +216,15 @@ class PtlWrapper(pl.LightningModule):
         accuracy_all_steps = torch.stack(
             [output["accuracy_all_steps"] for output in outputs]
         ).mean(dim=0)
+        accuracy_all_steps_std = torch.stack(
+            [output["accuracy_all_steps_std"] for output in outputs]
+        ).mean(dim=0)
         p = torch.stack([output["p"] for output in outputs]).mean(dim=0)
-        for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
+        for i, (accuracy, accuracy_std, step_p) in enumerate(
+            zip(accuracy_all_steps, accuracy_all_steps_std, p), start=1
+        ):
             self.log(f"{phase}/step_accuracy/{i}", accuracy)
+            self.log(f"{phase}/step_accuracy_std/{i}", accuracy_std)
             self.log(f"{phase}/step_p/{i}", step_p)
 
     def training_epoch_end(self, outputs):

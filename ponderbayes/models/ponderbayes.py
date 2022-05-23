@@ -13,7 +13,7 @@ import pyro.poutine as poutine
 from torch.distributions import constraints
 from pyro.nn import PyroModule, PyroParam, PyroSample
 from pyro.nn.module import to_pyro_module_
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, Trace_ELBO, Predictive
 from pyro.infer.autoguide import AutoNormal, AutoMultivariateNormal, init_to_mean
 from pyro.optim import Adam
 from ponderbayes.models import losses
@@ -88,6 +88,17 @@ class PonderBayes(PyroModule):
         )
 
         # self.save_hyperparameters()
+
+    def predict(self, guide, num_samples, x_batch):
+        return_sites = [f"obs_{x}" for x in range(self.max_steps)] + ["_RETURN"]
+        predictive = Predictive(
+            self,
+            guide=guide,
+            num_samples=num_samples,
+            return_sites=return_sites,
+        )
+        predictions = predictive(x_batch)
+        return predictions
 
     def forward(self, x, y_true=None):
         """Run forward pass.
@@ -165,7 +176,7 @@ class PonderBayes(PyroModule):
 
             with pyro.plate(f"data_{step}", x.shape[0]):
                 yhat = nn.functional.softmax(y[step], dim=0)
-                obs = pyro.sample(f"obs_{step}", dist.Categorical(yhat), obs=y_true)
+                _obs = pyro.sample(f"obs_{step}", dist.Categorical(yhat), obs=y_true)
     
         # return y, p, halting_step
         # Concatinate the outputs p [max_steps,num_inputs] 
