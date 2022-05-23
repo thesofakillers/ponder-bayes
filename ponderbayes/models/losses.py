@@ -108,7 +108,9 @@ def custom_loss(model, guide, *args, **kwargs):
 
     elbo = 0.0
     # P is only the first max_steps rows returned values
-    p = model_trace.nodes["_RETURN"]["value"][:model.max_steps]
+    p, _halting_step = torch.split(
+        model_trace.nodes["_RETURN"]["value"], model.max_steps
+    )
 
     # We are interested in obs_step and output layer weights and biases
     for site in model_trace.nodes.values():
