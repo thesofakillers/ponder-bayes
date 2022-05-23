@@ -78,6 +78,10 @@ class PonderBayes(PyroModule):
             lambda_p=self.lambda_p, max_steps=self.max_steps
         ).to(torch.float32)
 
+        self.loss_rec_inst = losses.ReconstructionLoss(
+            nn.BCEWithLogitsLoss(reduction="none")
+        ).to(torch.float32)
+
         self.output_layer.weight = PyroSample(
             dist.Normal(torch.Tensor([0.0]), torch.Tensor([1.0]))
             .expand([2, n_hidden])
@@ -177,11 +181,12 @@ class PonderBayes(PyroModule):
             with pyro.plate(f"data_{step}", x.shape[0]):
                 yhat = nn.functional.softmax(y[step], dim=0)
                 _obs = pyro.sample(f"obs_{step}", dist.Categorical(yhat), obs=y_true)
-    
+
         # return y, p, halting_step
-        # Concatinate the outputs p [max_steps,num_inputs] 
+        # Concatinate the outputs p [max_steps,num_inputs]
         # and halting step [1,num_inputs] into the same tensor
-        return torch.cat([p,halting_step.unsqueeze(0)])
+        return torch.cat([p, halting_step.unsqueeze(0)])
+
 
 class MyGuide(PyroModule):
     def __init__(self, n_input):
@@ -207,6 +212,3 @@ class MyGuide(PyroModule):
             "output_layer.bias",
             dist.Normal(self.bias_loc, self.bias_scale).expand([2]).to_event(1),
         )
-        
-
-

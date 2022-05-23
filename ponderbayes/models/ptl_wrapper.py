@@ -80,10 +80,6 @@ class PtlWrapper(pl.LightningModule):
         self.automatic_optimization = False
         self.guide = AutoMultivariateNormal(self.net, init_loc_fn=init_to_mean)
 
-        self.loss_reg_inst = losses.RegularizationLoss(
-            lambda_p=self.lambda_p, max_steps=self.max_steps
-        ).to(torch.float32)
-
         self.save_hyperparameters()
 
     def on_train_start(self):
@@ -161,7 +157,7 @@ class PtlWrapper(pl.LightningModule):
 
         loss = torch.Tensor([self.svi.step(x_batch, y_true)])
         results = self._shared_step(x_batch, y_true)
-        
+
         results["loss"] = loss
 
         self.log_dict(
@@ -173,9 +169,8 @@ class PtlWrapper(pl.LightningModule):
                     "accuracy_halted_step",
                     "accuracy_halted_step_std",
                 ]
-                
-                
-            }, prog_bar=True
+            },
+            prog_bar=True,
         )
         return results
 

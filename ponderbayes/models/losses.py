@@ -115,17 +115,23 @@ def custom_loss(model, guide, *args, **kwargs):
     # We are interested in obs_step and output layer weights and biases
     for site in model_trace.nodes.values():
         if site["type"] == "sample":
-            if "obs" in site["name"]:
-                step = int(site["name"].split("_")[-1])
-                score = site["fn"].log_prob(site["value"]) * p[step]
-            elif "halt" not in site["name"]:
+            if "obs" not in site["name"]:
                 score = site["fn"].log_prob(site["value"])
             elbo += score.mean()
 
+    # calculate ELBO
+    # logp = model_trace.log_prob_sum()
     logq = guide_trace.log_prob_sum()
-
     elbo -= logq
 
+    # calculate reconstruction loss
+
+    y_pred_batch = torch.zeros([model.max_steps, args[0].shape[0]])
+    for obs_n in range(model.max_steps):
+        y_pred_batch[obs_n, :] = model_trace.nodes[f"obs_{obs_n}"]["value"]
+    rec_loss = model.loss_rec_inst(p, y_pred_batch, args[1])
+
+    #  calculate regularization loss
     reg_loss = model.loss_reg_inst(p) * model.beta
-    # reg_loss = 0.0
-    return -elbo + reg_loss
+
+    return -elbo + rec_loss + reg_loss
