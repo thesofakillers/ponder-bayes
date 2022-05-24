@@ -53,7 +53,7 @@ class PtlWrapper(pl.LightningModule):
         allow_halting=False,
         beta=0.01,
         lambda_p=0.4,
-        lr=0.0003,
+        lr=0.0001,
         num_samples=7,
     ):
         super().__init__()
@@ -79,13 +79,19 @@ class PtlWrapper(pl.LightningModule):
         # necessary for Bayesian Inference
         self.automatic_optimization = False
         self.guide = AutoMultivariateNormal(self.net, init_loc_fn=init_to_mean)
+        # self.guide = ponderbayes.MyGuide(self.net)
 
         self.save_hyperparameters()
 
     def on_train_start(self):
         pyro.clear_param_store()
         opt = pyro.optim.ClippedAdam({"lr": self.lr, "clip_norm": 1.0})
-        self.svi = SVI(self.net.to(self.device), self.guide.to(self.device), opt, loss=losses.custom_loss)
+        self.svi = SVI(
+            self.net.to(self.device),
+            self.guide.to(self.device),
+            opt,
+            loss=losses.custom_loss,
+        )
 
     def forward(self, x, y_true=None):
         return self.net(x, y_true)

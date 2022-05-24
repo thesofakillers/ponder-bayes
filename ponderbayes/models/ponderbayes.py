@@ -155,7 +155,8 @@ class PonderBayes(PyroModule):
                 lambda_n = torch.sigmoid(self.lambda_layer(h))[:, 0]  # (batch_size,)
 
             # Store releavant outputs
-            y_list.append(self.output_layer(h))  # (batch_size,)
+            logits = self.output_layer(h)
+            y_list.append(logits)  # (batch_size,)
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
 
             halting_step = torch.maximum(
@@ -171,17 +172,17 @@ class PonderBayes(PyroModule):
             if self.allow_halting and (halting_step > 0).sum() == batch_size:
                 break
 
+            with pyro.plate(f"data_{n-1}", x.shape[0]):
+                _obs = pyro.sample(
+                    f"obs_{n-1}", dist.Categorical(logits=logits), obs=y_true
+                )
+
         y = torch.stack(y_list)
         p = torch.stack(p_list)
 
-        for step in range(self.max_steps):
-            # sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
-            # sigma = pyro.sample(f"sigma_{n}", dist.Gamma(0.5, 1))
-
-            with pyro.plate(f"data_{step}", x.shape[0]):
-                _obs = pyro.sample(
-                    f"obs_{step}", dist.Categorical(logits=y[step]), obs=y_true
-                )
+        # for step in range(self.max_steps):
+        #     sigma = pyro.sample(f"sigma_{n}", dist.Uniform(0.0, 1.0))
+        #     sigma = pyro.sample(f"sigma_{n}", dist.Gamma(0.5, 1))
 
         # return y, p, halting_step
         # Concatinate the outputs p [max_steps,num_inputs]
@@ -190,23 +191,25 @@ class PonderBayes(PyroModule):
 
 
 class MyGuide(PyroModule):
-    def __init__(self, n_input):
+    def __init__(self, model):
         super().__init__()
         # Let's point estimate sigma.
 
-        self.n_hidden = n_input.n_hidden
-        self.weights_loc = PyroParam(torch.tensor(0.0))
+        self.n_hidden = model.n_hidden
+        self.weights_loc = PyroParam(torch.zeros_like(model.output_layer.weight))
         self.weights_scale = PyroParam(
-            torch.tensor(10.0), constraint=constraints.positive
+            torch.randn_like(model.output_layer.weight), constraint=constraints.positive
         )
-        self.bias_loc = PyroParam(torch.tensor(0.0))
-        self.bias_scale = PyroParam(torch.tensor(10.0), constraint=constraints.positive)
+        self.bias_loc = PyroParam(torch.zeros_like(model.output_layer.bias))
+        self.bias_scale = PyroParam(
+            torch.randn_like(model.output_layer.bias), constraint=constraints.positive
+        )
 
     def forward(self, x, y=None):
         pyro.sample(
             "output_layer.weight",
             dist.Normal(self.weights_loc, self.weights_scale)
-            .expand([self.n_hidden, 2])
+            .expand([2, self.n_hidden])
             .to_event(2),
         )
         pyro.sample(
