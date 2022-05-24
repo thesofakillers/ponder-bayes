@@ -13,9 +13,9 @@ def accuracy(
 
     if threshold is None:
         if dim is None:
-            return ((y_pred.argmax(dim=-1)) == y_true).double().mean()
+            return (y_pred == y_true).double().mean()
         else:
-            return ((y_pred.argmax(dim=-1)) == y_true).double().mean(dim=dim)
+            return (y_pred == y_true).double().mean(dim=dim)
     else:
         if dim is None:
             return ((y_pred > threshold) == y_true).double().mean()
