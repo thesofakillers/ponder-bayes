@@ -128,22 +128,26 @@ def custom_loss(model, guide, *args, **kwargs):
                 score = site["fn"].log_prob(site["value"]) * p[step]
             else:
                 score = site["fn"].log_prob(site["value"])
-            elbo += score.mean()
+            elbo += score.sum()
 
     # calculate ELBO
     # logp = model_trace.log_prob_sum()
     logq = guide_trace.log_prob_sum()
-    elbo -= logq
+    print("logp:", elbo.item())
+    print("logq:", logq.item())
+    # elbo -= 0.1 * logq
 
     # calculate reconstruction loss
 
-    y_pred_batch = torch.zeros([model.max_steps, args[0].shape[0]])
-    for obs_n in range(model.max_steps):
-        y_pred_batch[obs_n, :] = model_trace.nodes[f"obs_{obs_n}"]["value"]
-    y_pred_batch = y_pred_batch.to(device)
-    rec_loss = model.loss_rec_inst(p, y_pred_batch, args[1])
+    # y_pred_batch = torch.zeros([model.max_steps, args[0].shape[0]])
+    # for obs_n in range(model.max_steps):
+    #     y_pred_batch[obs_n, :] = model_trace.nodes[f"obs_{obs_n}"]["value"]
+    # y_pred_batch = y_pred_batch.to(device)
+    # rec_loss = model.loss_rec_inst(p, y_pred_batch, args[1])
 
     #  calculate regularization loss
-    reg_loss = model.loss_reg_inst(p) * model.beta
+    reg_loss = model.loss_reg_inst(p)
+    print("reg_loss:", reg_loss.item())
+    reg_loss = reg_loss * model.beta
 
-    return -elbo + rec_loss + reg_loss
+    return -elbo + reg_loss

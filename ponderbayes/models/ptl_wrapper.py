@@ -2,6 +2,7 @@
 Credit for PonderNet, ReconstructionLoss and RegularizationLoss largely to
 https://github.com/jankrepl/mildlyoverfitted/tree/master/github_adventures/pondernet
 """
+from trace import Trace
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
@@ -11,7 +12,7 @@ import pyro.poutine as poutine
 from torch.distributions import constraints
 from pyro.nn import PyroModule, PyroParam, PyroSample
 from pyro.nn.module import to_pyro_module_
-from pyro.infer import SVI, Trace_ELBO, Predictive
+from pyro.infer import SVI, TraceMeanField_ELBO, Predictive
 from pyro.infer.autoguide import AutoNormal, AutoMultivariateNormal, init_to_mean
 from pyro.optim import Adam
 from pyro.infer.autoguide import AutoDiagonalNormal
@@ -53,8 +54,8 @@ class PtlWrapper(pl.LightningModule):
         allow_halting=False,
         beta=0.01,
         lambda_p=0.4,
-        lr=0.0001,
-        num_samples=7,
+        lr=0.0003,
+        num_samples=5,
     ):
         super().__init__()
 
@@ -85,12 +86,15 @@ class PtlWrapper(pl.LightningModule):
 
     def on_train_start(self):
         pyro.clear_param_store()
-        opt = pyro.optim.ClippedAdam({"lr": self.lr, "clip_norm": 1.0})
+        opt = pyro.optim.Adam(
+            {"lr": self.lr, "betas": (0.90, 0.999)}, {"clip_norm": 1.0}
+        )
         self.svi = SVI(
             self.net.to(self.device),
             self.guide.to(self.device),
             opt,
             loss=losses.custom_loss,
+            # TraceMeanField_ELBO(),
         )
 
     def forward(self, x, y_true=None):
@@ -141,12 +145,11 @@ class PtlWrapper(pl.LightningModule):
         )[0]
         # (scalar), the accuracy at the halted step
         accuracy_halted_step = metrics.accuracy(
-            y_halted_batch, y_true_batch, threshold=0
+            y_halted_batch,
+            y_true_batch,
         )
         # (max_steps, ), the accuracy at each step
-        accuracy_all_steps = metrics.accuracy(
-            y_pred_batch, y_true_batch, threshold=0, dim=1
-        )
+        accuracy_all_steps = metrics.accuracy(y_pred_batch, y_true_batch, dim=1)
         return accuracy_halted_step, accuracy_all_steps
 
     def training_step(self, batch, batch_idx):

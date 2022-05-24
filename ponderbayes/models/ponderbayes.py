@@ -88,7 +88,9 @@ class PonderBayes(PyroModule):
             .to_event(2)
         )
         self.output_layer.bias = PyroSample(
-            dist.Normal(0.0, 10).expand([2]).to_event(1)
+            dist.Normal(torch.Tensor([0.0]), torch.Tensor([10.0]))
+            .expand([2])
+            .to_event(1)
         )
 
     def predict(self, guide, num_samples, x_batch):
@@ -173,6 +175,7 @@ class PonderBayes(PyroModule):
                 break
 
             with pyro.plate(f"data_{n-1}", x.shape[0]):
+                # yhat = torch.sigmoid(logits)
                 _obs = pyro.sample(
                     f"obs_{n-1}", dist.Categorical(logits=logits), obs=y_true
                 )
