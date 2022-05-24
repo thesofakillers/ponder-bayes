@@ -85,21 +85,14 @@ class PtlWrapper(pl.LightningModule):
     def on_train_start(self):
         pyro.clear_param_store()
         opt = pyro.optim.ClippedAdam({"lr": self.lr, "clip_norm": 1.0})
-        self.svi = SVI(self.net, self.guide, opt, loss=losses.custom_loss)
+        self.svi = SVI(self.net.to(self.device), self.guide.to(self.device), opt, loss=losses.custom_loss)
 
     def forward(self, x, y_true=None):
         return self.net(x, y_true)
 
     def _shared_step(self, x_batch, y_true_batch):
         # Define what we want to be returned from the predictive
-        # return_sites = [f"obs_{x}" for x in range(self.net.max_steps + 1)] + ["_RETURN"]
-        # predictive = Predictive(
-        #     self.net,
-        #     guide=self.guide,
-        #     num_samples=self.num_samples,
-        #     return_sites=return_sites,
-        # )
-        # predictions = predictive(x_batch)
+        device = x_batch.device
         predictions = self.net.predict(self.guide, self.num_samples, x_batch)
 
         # Separate p which is the probabilities of all steps and the
@@ -113,6 +106,7 @@ class PtlWrapper(pl.LightningModule):
         for obs_n in range(self.net.max_steps):
             y_pred_batch[:, obs_n, :] = predictions[f"obs_{obs_n}"]
 
+        y_pred_batch = y_pred_batch.to(device)
         accuracy_halted_step = torch.zeros([self.num_samples])
         accuracy_all_steps = torch.zeros([self.num_samples, self.max_steps])
 
