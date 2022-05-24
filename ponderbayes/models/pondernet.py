@@ -36,8 +36,6 @@ class PonderNetModule(nn.Module):
         n_hidden=64,
         max_steps=20,
         allow_halting=False,
-        beta=0.01,
-        lambda_p=0.4,
     ):
         super().__init__()
         self.n_hidden = n_hidden
@@ -173,8 +171,12 @@ class PonderNet(pl.LightningModule):
 
     def forward(self, x):
         """Run forward pass.
+        See PonderNetModule for further details.
 
-        See PonderNetModule for details.
+        Parameters
+        ----------
+        x : torch.Tensor
+            Batch of input features of shape `(batch_size, n_elems)`.
 
         """
         y, p, halting_step = self.net(x)
