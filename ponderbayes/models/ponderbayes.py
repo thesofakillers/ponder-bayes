@@ -179,8 +179,9 @@ class PonderBayes(PyroModule):
             # sigma = pyro.sample(f"sigma_{n}", dist.Gamma(0.5, 1))
 
             with pyro.plate(f"data_{step}", x.shape[0]):
-                yhat = nn.functional.softmax(y[step], dim=0)
-                _obs = pyro.sample(f"obs_{step}", dist.Categorical(yhat), obs=y_true)
+                _obs = pyro.sample(
+                    f"obs_{step}", dist.Categorical(logits=y[step]), obs=y_true
+                )
 
         # return y, p, halting_step
         # Concatinate the outputs p [max_steps,num_inputs]
