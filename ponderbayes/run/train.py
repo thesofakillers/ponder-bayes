@@ -15,7 +15,11 @@ if __name__ == "__main__":
         help="The seed to use for random number generation",
     )
     parser.add_argument(
-        "--model", type=str, default="pondernet", help="What model variant to use"
+        "--model",
+        type=str,
+        default="pondernet",
+        help="What model variant to use",
+        choices=["pondernet", "groupthink"],
     )
     parser.add_argument(
         "-c",
@@ -111,6 +115,8 @@ if __name__ == "__main__":
     # model instantiation
     if args.model == "pondernet":
         model_class = models.pondernet.PonderNet
+    elif args.model == "groupthink":
+        model_class = models.groupthink.GroupThink
     else:
         raise ValueError("Invalid `model` arg passed")
     if args.checkpoint:
