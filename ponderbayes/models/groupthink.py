@@ -151,12 +151,20 @@ class GroupThink(pl.LightningModule):
         results = {
             "halting_step": halting_step_ensemble.double().mean(),
             "accuracy_halted_step": accuracy_halted_step.mean(),
+            "accuracy_per_model": accuracies.mean(dim=1),
             "loss_rec": losses_rec.mean(dim=0),
             "loss_reg": losses_reg.mean(dim=0),
             "loss": losses_overall.mean(dim=0),
             "std_err": std_err_halted.mean(),
         }
-        self.log_dict({f"{phase}/{k}": v for k, v in results.items()})
+        # logging; accuracy_per_model logged in _shared_epoch_end
+        self.log_dict(
+            {
+                f"{phase}/{k}": v
+                for k, v in results.items()
+                if k not in ["accuracy_per_model"]
+            }
+        )
         return results
 
     def training_step(self, batch, batch_idx):
@@ -189,6 +197,24 @@ class GroupThink(pl.LightningModule):
         # overall loss
         loss_overall = loss_rec + self.beta * loss_reg
         return loss_rec, loss_reg, loss_overall
+
+    def _shared_epoch_end(self, outputs, phase):
+        """Accumulates and logs per-model metrics at the end of the epoch"""
+        # (n_batches, n_models)
+        accuracy_per_model = torch.stack(
+            [output["accuracy_per_model"] for output in outputs]
+        ).mean(dim=0)
+        for i, accuracy in enumerate(accuracy_per_model, start=1):
+            self.log(f"{phase}/model_{i}/accuracy", accuracy)
+
+    def training_epoch_end(self, outputs):
+        self._shared_epoch_end(outputs, "train")
+
+    def validation_epoch_end(self, outputs):
+        self._shared_epoch_end(outputs, "val")
+
+    def test_epoch_end(self, outputs):
+        self._shared_epoch_end(outputs, "test")
 
     def configure_optimizers(self):
         optimizers = []
