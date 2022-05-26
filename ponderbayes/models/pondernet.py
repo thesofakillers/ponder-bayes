@@ -10,8 +10,9 @@ from ponderbayes.utils import metrics
 from ponderbayes.models import losses
 
 
-class PonderNet(pl.LightningModule):
-    """Network that ponders.
+class PonderNetModule(nn.Module):
+    """
+    Torch module containing forward pass of PonderNet
 
     Parameters
     ----------
@@ -27,10 +28,6 @@ class PonderNet(pl.LightningModule):
     allow_halting : bool
         If True, then the forward pass is allowed to halt before
         reaching the maximum steps.
-    beta : float
-        Hyperparameter governing the regularization loss
-    lambda_p : float
-        Hyperparameter governing the probability of halting
     """
 
     def __init__(
@@ -39,34 +36,18 @@ class PonderNet(pl.LightningModule):
         n_hidden=64,
         max_steps=20,
         allow_halting=False,
-        beta=0.01,
-        lambda_p=0.4,
     ):
         super().__init__()
-
-        self.n_elems = n_elems
         self.n_hidden = n_hidden
         self.max_steps = max_steps
         self.allow_halting = allow_halting
-        self.beta = beta
-        self.lambda_p = lambda_p
 
         self.cell = nn.GRUCell(n_elems, n_hidden)
         self.output_layer = nn.Linear(n_hidden, 1)
         self.lambda_layer = nn.Linear(n_hidden, 1)
 
-        self.loss_rec_inst = losses.ReconstructionLoss(
-            nn.BCEWithLogitsLoss(reduction="none")
-        ).to(torch.float32)
-        self.loss_reg_inst = losses.RegularizationLoss(
-            lambda_p=self.lambda_p, max_steps=self.max_steps
-        ).to(torch.float32)
-
-        self.save_hyperparameters()
-
     def forward(self, x):
-        """Run forward pass.
-
+        """
         Parameters
         ----------
         x : torch.Tensor
@@ -132,6 +113,73 @@ class PonderNet(pl.LightningModule):
 
         y = torch.stack(y_list)
         p = torch.stack(p_list)
+
+        return y, p, halting_step
+
+
+class PonderNet(pl.LightningModule):
+    """Network that ponders.
+
+    Parameters
+    ----------
+    n_elems : int
+        Number of features in the vector.
+
+    n_hidden : int
+        Hidden layer size of the recurrent cell.
+
+    max_steps : int
+        Maximum number of steps the network can "ponder" for.
+
+    allow_halting : bool
+        If True, then the forward pass is allowed to halt before
+        reaching the maximum steps.
+    beta : float
+        Hyperparameter governing the regularization loss
+    lambda_p : float
+        Hyperparameter governing the probability of halting
+    """
+
+    def __init__(
+        self,
+        n_elems,
+        n_hidden=64,
+        max_steps=20,
+        allow_halting=False,
+        beta=0.01,
+        lambda_p=0.4,
+    ):
+        super().__init__()
+
+        self.n_elems = n_elems
+        self.n_hidden = n_hidden
+        self.max_steps = max_steps
+        self.allow_halting = allow_halting
+        self.beta = beta
+        self.lambda_p = lambda_p
+
+        self.net = PonderNetModule(n_elems, n_hidden, max_steps, allow_halting)
+
+        self.loss_rec_inst = losses.ReconstructionLoss(
+            nn.BCEWithLogitsLoss(reduction="none")
+        ).to(torch.float32)
+        self.loss_reg_inst = losses.RegularizationLoss(
+            lambda_p=self.lambda_p, max_steps=self.max_steps
+        ).to(torch.float32)
+
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        """Run forward pass.
+        See PonderNetModule for further details.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Batch of input features of shape `(batch_size, n_elems)`.
+
+        """
+        y, p, halting_step = self.net(x)
 
         return y, p, halting_step
 
