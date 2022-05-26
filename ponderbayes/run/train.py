@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 import ponderbayes.models as models
 import ponderbayes.data.datamodules as datamodules
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a model")
     parser.add_argument(
@@ -107,6 +108,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n-iter", type=int, default=100000, help="Number of training steps to use"
     )
+    parser.add_argument(
+        "--ensemble-size", type=int, default=5, help="Number of models to ensemble"
+    )
     args = parser.parse_args()
 
     # for reproducibility
@@ -126,7 +130,11 @@ if __name__ == "__main__":
         model = model_class(
             n_elems=args.n_elems,
             n_hidden=args.n_hidden,
-            max_steps=args.max_steps,
+            max_steps=(
+                args.max_steps * args.ensemble_size
+                if args.model == "groupthink"
+                else args.max_steps
+            ),
             allow_halting=False,
             beta=args.beta,
             lambda_p=args.lambda_p,
@@ -149,7 +157,7 @@ if __name__ == "__main__":
         max_steps=args.n_iter,
         callbacks=callbacks,
         logger=logger,
-        gradient_clip_val=1,
+        gradient_clip_val=None if args.model == "groupthink" else 1,
         val_check_interval=args.val_check_interval,
     )
 
