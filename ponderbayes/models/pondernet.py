@@ -6,12 +6,13 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 
-from ponderbayes.utils import metrics
+from ponderbayes import utils
 from ponderbayes.models import losses
 
 
-class PonderNet(pl.LightningModule):
-    """Network that ponders.
+class PonderNetModule(nn.Module):
+    """
+    Torch module containing forward pass of PonderNet
 
     Parameters
     ----------
@@ -27,10 +28,6 @@ class PonderNet(pl.LightningModule):
     allow_halting : bool
         If True, then the forward pass is allowed to halt before
         reaching the maximum steps.
-    beta : float
-        Hyperparameter governing the regularization loss
-    lambda_p : float
-        Hyperparameter governing the probability of halting
     """
 
     def __init__(
@@ -39,34 +36,18 @@ class PonderNet(pl.LightningModule):
         n_hidden=64,
         max_steps=20,
         allow_halting=False,
-        beta=0.01,
-        lambda_p=0.4,
     ):
         super().__init__()
-
-        self.n_elems = n_elems
         self.n_hidden = n_hidden
         self.max_steps = max_steps
         self.allow_halting = allow_halting
-        self.beta = beta
-        self.lambda_p = lambda_p
 
         self.cell = nn.GRUCell(n_elems, n_hidden)
         self.output_layer = nn.Linear(n_hidden, 1)
         self.lambda_layer = nn.Linear(n_hidden, 1)
 
-        self.loss_rec_inst = losses.ReconstructionLoss(
-            nn.BCEWithLogitsLoss(reduction="none")
-        ).to(torch.float32)
-        self.loss_reg_inst = losses.RegularizationLoss(
-            lambda_p=self.lambda_p, max_steps=self.max_steps
-        ).to(torch.float32)
-
-        self.save_hyperparameters()
-
     def forward(self, x):
-        """Run forward pass.
-
+        """
         Parameters
         ----------
         x : torch.Tensor
@@ -114,7 +95,7 @@ class PonderNet(pl.LightningModule):
                 lambda_n = torch.sigmoid(self.lambda_layer(h))[:, 0]  # (batch_size,)
 
             # Store releavant outputs
-            y_list.append(self.output_layer(h)[:, 0])  # (batch_size,)
+            y_list.append(self.output_layer(h).squeeze())  # (batch_size,)
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
 
             halting_step = torch.maximum(
@@ -135,22 +116,82 @@ class PonderNet(pl.LightningModule):
 
         return y, p, halting_step
 
+
+class PonderNet(pl.LightningModule):
+    """Network that ponders.
+
+    Parameters
+    ----------
+    n_elems : int
+        Number of features in the vector.
+
+    n_hidden : int
+        Hidden layer size of the recurrent cell.
+
+    max_steps : int
+        Maximum number of steps the network can "ponder" for.
+
+    allow_halting : bool
+        If True, then the forward pass is allowed to halt before
+        reaching the maximum steps.
+    beta : float
+        Hyperparameter governing the regularization loss
+    lambda_p : float
+        Hyperparameter governing the probability of halting
+    """
+
+    def __init__(
+        self,
+        n_elems,
+        n_hidden=64,
+        max_steps=20,
+        allow_halting=False,
+        beta=0.01,
+        lambda_p=0.4,
+    ):
+        super().__init__()
+
+        self.n_elems = n_elems
+        self.n_hidden = n_hidden
+        self.max_steps = max_steps
+        self.allow_halting = allow_halting
+        self.beta = beta
+        self.lambda_p = lambda_p
+
+        self.net = PonderNetModule(n_elems, n_hidden, max_steps, allow_halting)
+
+        self.loss_rec_inst = losses.ReconstructionLoss(
+            nn.BCEWithLogitsLoss(reduction="none")
+        ).to(torch.float32)
+        self.loss_reg_inst = losses.RegularizationLoss(
+            lambda_p=self.lambda_p, max_steps=self.max_steps
+        ).to(torch.float32)
+
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        """Run forward pass.
+        See PonderNetModule for further details.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Batch of input features of shape `(batch_size, n_elems)`.
+
+        """
+        y, p, halting_step = self.net(x)
+
+        return y, p, halting_step
+
     def _accuracy_step(self, y_pred_batch, y_true_batch, halting_step):
         """computes accuracy metrics for a given batch"""
         # (batch_size,) the prediction where the model halted
-        y_halted_batch = y_pred_batch.gather(
-            dim=0,
-            index=halting_step[None, :] - 1,
-        )[0]
+        y_halted_batch = utils.tensor_at_halting_step(y_pred_batch, halting_step)
         # (scalar), the accuracy at the halted step
-        accuracy_halted_step = metrics.accuracy(
+        accuracy_halted_step = utils.metrics.accuracy(
             y_halted_batch, y_true_batch, threshold=0
         )
-        # (max_steps, ), the accuracy at each step
-        accuracy_all_steps = metrics.accuracy(
-            y_pred_batch, y_true_batch, threshold=0, dim=1
-        )
-        return accuracy_halted_step, accuracy_all_steps
+        return accuracy_halted_step
 
     def _loss_step(self, p, y_pred_batch, y_true_batch):
         """computes the loss for a given batch"""
@@ -175,8 +216,8 @@ class PonderNet(pl.LightningModule):
         y_true_batch = y_true_batch.double()
         # (max_steps, batch_size), (max_steps, batch_size), (batch_size,)
         y_pred_batch, p, halting_step = self(x_batch)
-        # batch accuracy at the halted step, batch accuracy at each step
-        accuracy_halted_step, accuracy_all_steps = self._accuracy_step(
+        # batch accuracy at the halted step
+        accuracy_halted_step = self._accuracy_step(
             y_pred_batch, y_true_batch, halting_step
         )
         # reconstruction, regularization and overall loss
@@ -186,26 +227,13 @@ class PonderNet(pl.LightningModule):
         # collating all results
         results = {
             "halting_step": halting_step.double().mean(),
-            "p": p.mean(dim=1),
             "accuracy_halted_step": accuracy_halted_step,
-            "accuracy_all_steps": accuracy_all_steps,
             "loss_rec": loss_rec,
             "loss_reg": loss_reg,
             "loss": loss_overall,
         }
-        # logging; p and accuracy_all_steps logged in _shared_epoch_end
-        self.log_dict(
-            {
-                f"{phase}/{k}": results[k]
-                for k in [
-                    "loss_rec",
-                    "loss_reg",
-                    "loss",
-                    "halting_step",
-                    "accuracy_halted_step",
-                ]
-            }
-        )
+        # logging
+        self.log_dict({f"{phase}/{k}": v for k, v in results.items()})
         # needed for backward
         return results
 
@@ -217,25 +245,6 @@ class PonderNet(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, "test")
-
-    def _shared_epoch_end(self, outputs, phase):
-        """Accumulates and logs per-step metrics at the end of the epoch"""
-        accuracy_all_steps = torch.stack(
-            [output["accuracy_all_steps"] for output in outputs]
-        ).mean(dim=0)
-        p = torch.stack([output["p"] for output in outputs]).mean(dim=0)
-        for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
-            self.log(f"{phase}/step_accuracy/{i}", accuracy)
-            self.log(f"{phase}/step_p/{i}", step_p)
-
-    def training_epoch_end(self, outputs):
-        self._shared_epoch_end(outputs, "train")
-
-    def validation_epoch_end(self, outputs):
-        self._shared_epoch_end(outputs, "val")
-
-    def test_epoch_end(self, outputs):
-        self._shared_epoch_end(outputs, "test")
 
     def configure_optimizers(self):
         """Handles optimizers and schedulers"""

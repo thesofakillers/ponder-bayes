@@ -2,10 +2,10 @@
 
 #SBATCH --partition=gpu_shared_course
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=pondernet-extrap
+#SBATCH --job-name=groupthink-extrap
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
-#SBATCH --time=01:15:00
+#SBATCH --time=06:15:00
 #SBATCH --mem=32000M
 #SBATCH --array=1-5%2
 #SBATCH --output=lisa/outputs/%x_%A_%a.out
@@ -19,12 +19,12 @@ source activate ponderbayes
 SEEDS_FILE=./lisa/seeds.txt
 
 # comment out the final line if you only care about seed 42
-srun python -u ponderbayes/run/train.py --model pondernet \
+srun python -u ponderbayes/run/train.py --model groupthink \
   --mode extrapolation \
   --n-elems 24 \
   --n-hidden 128 \
   --lambda-p 0.2 \
   --beta 0.01 --batch-size 128 \
   --num-workers 3 \
-  --n-iter 80000
+  --n-iter 400000
 $(head -$SLURM_ARRAY_TASK_ID $SEEDS_FILE | tail -1)

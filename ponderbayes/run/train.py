@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 import ponderbayes.models as models
 import ponderbayes.data.datamodules as datamodules
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a model")
     parser.add_argument(
@@ -15,7 +16,14 @@ if __name__ == "__main__":
         help="The seed to use for random number generation",
     )
     parser.add_argument(
-        "--model", type=str, default="pondernet", help="What model variant to use"
+        "--disable-logging", action="store_true", help="Disable logging", default=False
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="pondernet",
+        help="What model variant to use",
+        choices=["pondernet", "groupthink"],
     )
     parser.add_argument(
         "-c",
@@ -103,6 +111,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n-iter", type=int, default=100000, help="Number of training steps to use"
     )
+    parser.add_argument(
+        "--ensemble-size", type=int, default=5, help="Number of models to ensemble"
+    )
     args = parser.parse_args()
 
     # for reproducibility
@@ -111,6 +122,8 @@ if __name__ == "__main__":
     # model instantiation
     if args.model == "pondernet":
         model_class = models.pondernet.PonderNet
+    elif args.model == "groupthink":
+        model_class = models.groupthink.GroupThink
     else:
         raise ValueError("Invalid `model` arg passed")
     if args.checkpoint:
@@ -128,22 +141,30 @@ if __name__ == "__main__":
 
     # trainer config and instantiation
     cb_config = {"monitor": "val/accuracy_halted_step", "mode": "max"}
-    ckpt_cb = pl.callbacks.ModelCheckpoint(save_top_k=1, **cb_config)
-    callbacks = [ckpt_cb]
+    callbacks = []
+    if not args.disable_logging:
+        ckpt_cb = pl.callbacks.ModelCheckpoint(save_top_k=1, **cb_config)
+        callbacks.append(ckpt_cb)
+        logger = pl.loggers.TensorBoardLogger(
+            save_dir="models", name=f"{args.model}_{args.mode}_{args.n_elems}"
+        )
+    else:
+        logger = False
     if args.early_stopping:
         stop_cb = pl.callbacks.EarlyStopping(**cb_config)
         callbacks.append(stop_cb)
-    logger = pl.loggers.TensorBoardLogger(
-        save_dir="models", name=f"{args.model}_{args.mode}_{args.n_elems}"
-    )
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
         enable_progress_bar=args.progress_bar,
-        max_steps=args.n_iter,
+        max_steps=(
+            args.n_iter * args.ensemble_size
+            if args.model == "groupthink"
+            else args.n_iter
+        ),
         callbacks=callbacks,
         logger=logger,
-        gradient_clip_val=1,
+        gradient_clip_val=None if args.model == "groupthink" else 1,
         val_check_interval=args.val_check_interval,
     )
 
