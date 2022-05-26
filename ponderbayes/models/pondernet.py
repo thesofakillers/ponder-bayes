@@ -191,11 +191,7 @@ class PonderNet(pl.LightningModule):
         accuracy_halted_step = utils.metrics.accuracy(
             y_halted_batch, y_true_batch, threshold=0
         )
-        # (max_steps, ), the accuracy at each step
-        accuracy_all_steps = utils.metrics.accuracy(
-            y_pred_batch, y_true_batch, threshold=0, dim=1
-        )
-        return accuracy_halted_step, accuracy_all_steps
+        return accuracy_halted_step
 
     def _loss_step(self, p, y_pred_batch, y_true_batch):
         """computes the loss for a given batch"""
@@ -220,8 +216,8 @@ class PonderNet(pl.LightningModule):
         y_true_batch = y_true_batch.double()
         # (max_steps, batch_size), (max_steps, batch_size), (batch_size,)
         y_pred_batch, p, halting_step = self(x_batch)
-        # batch accuracy at the halted step, batch accuracy at each step
-        accuracy_halted_step, accuracy_all_steps = self._accuracy_step(
+        # batch accuracy at the halted step
+        accuracy_halted_step = self._accuracy_step(
             y_pred_batch, y_true_batch, halting_step
         )
         # reconstruction, regularization and overall loss
@@ -231,26 +227,13 @@ class PonderNet(pl.LightningModule):
         # collating all results
         results = {
             "halting_step": halting_step.double().mean(),
-            "p": p.mean(dim=1),
             "accuracy_halted_step": accuracy_halted_step,
-            "accuracy_all_steps": accuracy_all_steps,
             "loss_rec": loss_rec,
             "loss_reg": loss_reg,
             "loss": loss_overall,
         }
-        # logging; p and accuracy_all_steps logged in _shared_epoch_end
-        self.log_dict(
-            {
-                f"{phase}/{k}": results[k]
-                for k in [
-                    "loss_rec",
-                    "loss_reg",
-                    "loss",
-                    "halting_step",
-                    "accuracy_halted_step",
-                ]
-            }
-        )
+        # logging
+        self.log_dict({f"{phase}/{k}": v for k, v in results.items()})
         # needed for backward
         return results
 
@@ -262,25 +245,6 @@ class PonderNet(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, "test")
-
-    def _shared_epoch_end(self, outputs, phase):
-        """Accumulates and logs per-step metrics at the end of the epoch"""
-        accuracy_all_steps = torch.stack(
-            [output["accuracy_all_steps"] for output in outputs]
-        ).mean(dim=0)
-        p = torch.stack([output["p"] for output in outputs]).mean(dim=0)
-        for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
-            self.log(f"{phase}/step_accuracy/{i}", accuracy)
-            self.log(f"{phase}/step_p/{i}", step_p)
-
-    def training_epoch_end(self, outputs):
-        self._shared_epoch_end(outputs, "train")
-
-    def validation_epoch_end(self, outputs):
-        self._shared_epoch_end(outputs, "val")
-
-    def test_epoch_end(self, outputs):
-        self._shared_epoch_end(outputs, "test")
 
     def configure_optimizers(self):
         """Handles optimizers and schedulers"""
