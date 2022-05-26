@@ -1,6 +1,7 @@
 # user defined
 /data/
 /models/
+.vscode
 # lisa job outputs
 *.out
 # checkpoints
