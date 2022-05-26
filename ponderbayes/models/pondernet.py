@@ -95,7 +95,7 @@ class PonderNetModule(nn.Module):
                 lambda_n = torch.sigmoid(self.lambda_layer(h))[:, 0]  # (batch_size,)
 
             # Store releavant outputs
-            y_list.append(self.output_layer(h)[:, 0])  # (batch_size,)
+            y_list.append(self.output_layer(h).squeeze())  # (batch_size,)
             p_list.append(un_halted_prob * lambda_n)  # (batch_size,)
 
             halting_step = torch.maximum(
