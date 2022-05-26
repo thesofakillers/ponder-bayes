@@ -16,6 +16,9 @@ if __name__ == "__main__":
         help="The seed to use for random number generation",
     )
     parser.add_argument(
+        "--disable-logging", action="store_true", help="Disable logging", default=False
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default="pondernet",
@@ -142,14 +145,18 @@ if __name__ == "__main__":
 
     # trainer config and instantiation
     cb_config = {"monitor": "val/accuracy_halted_step", "mode": "max"}
-    ckpt_cb = pl.callbacks.ModelCheckpoint(save_top_k=1, **cb_config)
-    callbacks = [ckpt_cb]
+    callbacks = []
+    if not args.disable_logging:
+        ckpt_cb = pl.callbacks.ModelCheckpoint(save_top_k=1, **cb_config)
+        callbacks.append(ckpt_cb)
+        logger = pl.loggers.TensorBoardLogger(
+            save_dir="models", name=f"{args.model}_{args.mode}_{args.n_elems}"
+        )
+    else:
+        logger = False
     if args.early_stopping:
         stop_cb = pl.callbacks.EarlyStopping(**cb_config)
         callbacks.append(stop_cb)
-    logger = pl.loggers.TensorBoardLogger(
-        save_dir="models", name=f"{args.model}_{args.mode}_{args.n_elems}"
-    )
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
