@@ -12,7 +12,8 @@ from torchvision import transforms
 
 class MNIST_DataModule(LightningDataModule):
     """
-    DataModule to hold the MNIST dataset. Accepts different transforms for train and test to
+    DataModule to hold the MNIST dataset.
+    Accepts different transforms for train and test to
     allow for extrapolation experiments.
 
     Parameters
@@ -34,7 +35,7 @@ class MNIST_DataModule(LightningDataModule):
 
     def __init__(
         self,
-        data_dir="./data/raw/"
+        data_dir="./data/raw/",
         train_transform=None,
         test_transform=None,
         batch_size=256,
