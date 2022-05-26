@@ -133,11 +133,7 @@ if __name__ == "__main__":
         model = model_class(
             n_elems=args.n_elems,
             n_hidden=args.n_hidden,
-            max_steps=(
-                args.max_steps * args.ensemble_size
-                if args.model == "groupthink"
-                else args.max_steps
-            ),
+            max_steps=args.max_steps,
             allow_halting=False,
             beta=args.beta,
             lambda_p=args.lambda_p,
@@ -161,7 +157,11 @@ if __name__ == "__main__":
         devices="auto",
         accelerator="auto",
         enable_progress_bar=args.progress_bar,
-        max_steps=args.n_iter,
+        max_steps=(
+            args.n_iter * args.ensemble_size
+            if args.model == "groupthink"
+            else args.n_iter
+        ),
         callbacks=callbacks,
         logger=logger,
         gradient_clip_val=None if args.model == "groupthink" else 1,
