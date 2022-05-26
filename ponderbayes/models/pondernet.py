@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 
-from ponderbayes.utils import metrics
+from ponderbayes import utils
 from ponderbayes.models import losses
 
 
@@ -186,16 +186,13 @@ class PonderNet(pl.LightningModule):
     def _accuracy_step(self, y_pred_batch, y_true_batch, halting_step):
         """computes accuracy metrics for a given batch"""
         # (batch_size,) the prediction where the model halted
-        y_halted_batch = y_pred_batch.gather(
-            dim=0,
-            index=halting_step[None, :] - 1,
-        )[0]
+        y_halted_batch = utils.tensor_at_halting_step(y_pred_batch, halting_step)
         # (scalar), the accuracy at the halted step
-        accuracy_halted_step = metrics.accuracy(
+        accuracy_halted_step = utils.metrics.accuracy(
             y_halted_batch, y_true_batch, threshold=0
         )
         # (max_steps, ), the accuracy at each step
-        accuracy_all_steps = metrics.accuracy(
+        accuracy_all_steps = utils.metrics.accuracy(
             y_pred_batch, y_true_batch, threshold=0, dim=1
         )
         return accuracy_halted_step, accuracy_all_steps
