@@ -25,7 +25,7 @@ find ./models -name "*.ckpt" | grep $1 > $CHECKPOINT_FILE
 
 
 # tests all models in the checkpoint file
-# while read p; do
-#   python $TEST_SCRIPT \
-#     -c $p
-# done < "$CHECKPOINT_FILE"
+while read p; do
+  python $TEST_SCRIPT \
+    -c $p
+done < "$CHECKPOINT_FILE"
