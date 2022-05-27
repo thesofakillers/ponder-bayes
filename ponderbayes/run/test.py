@@ -82,6 +82,8 @@ if __name__ == "__main__":
         model_class = models.pondernet.PonderNet
     elif hparams["name"] == "groupthink":
         model_class = models.groupthink.GroupThink
+    elif hparams["name"] == "pondernet_mnist":
+        model_class = models.pondernet.PonderNetMNIST
     else:
         raise ValueError("Invalid `model` name in checkpoint path")
 
@@ -101,14 +103,22 @@ if __name__ == "__main__":
     )
 
     # init data, pass None to n_train_samples because not training
-    parity_datamodule = datamodules.ParityDataModule(
-        n_train_samples=None,
-        n_eval_samples=args.n_test_samples,
-        n_elems=hparams["n_elems"],
-        mode=hparams["mode"],
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-    )
+    if hparams["name"] == "pondernet" or hparams["name"] == "groupthink":
+        parity_datamodule = datamodules.ParityDataModule(
+            n_train_samples=None,
+            n_eval_samples=args.n_test_samples,
+            n_elems=hparams["n_elems"],
+            mode=hparams["mode"],
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+        )
+    elif hparams["name"] == "pondernet_mnist":
+        train_transform, test_transform = datamodules.get_transforms()
+        mnist_datamodule = datamodules.MNIST_DataModule(
+            batch_size=args.batch_size,
+            train_transform=train_transform,
+            test_transform=test_transform,
+        )
 
     # test model, load directly here
     results = trainer.test(model=model, datamodule=parity_datamodule)
