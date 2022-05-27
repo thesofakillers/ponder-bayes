@@ -7,7 +7,7 @@ from ponderbayes.models import losses
 from ponderbayes import utils
 
 
-class GroupThink(pl.LightningModule):
+class RationalGroupThink(pl.LightningModule):
     """
     PonderNets Together Strong.
 
@@ -39,7 +39,6 @@ class GroupThink(pl.LightningModule):
         max_steps=20,
         allow_halting=False,
         beta=0.01,
-        lambda_p=0.4,
     ):
         super().__init__()
 
@@ -48,7 +47,6 @@ class GroupThink(pl.LightningModule):
         self.max_steps = max_steps
         self.allow_halting = allow_halting
         self.beta = beta
-        self.lambda_p = lambda_p
 
         self.ensemble_size = ensemble_size
         self.ensemble = nn.ModuleList(
@@ -63,11 +61,18 @@ class GroupThink(pl.LightningModule):
         self.loss_rec_inst = losses.ReconstructionLoss(
             nn.BCEWithLogitsLoss(reduction="none")
         ).to(torch.float32)
-        self.loss_reg_inst = losses.RegularizationLoss(
-            lambda_p=self.lambda_p, max_steps=self.max_steps
+        self.loss_reg_inst = losses.DynamicRegularizationLoss(
+            max_steps=self.max_steps
         ).to(torch.float32)
 
         self.save_hyperparameters()
+
+        # initialize std error to maximum
+        self.std_err_halted = (0.5 / torch.sqrt(torch.Tensor([self.ensemble_size])))[
+            :, None
+        ].detach()
+
+        self.lambda_p_mlp = nn.Sequential(nn.Linear(1, 1), nn.Sigmoid())
 
     def forward(self, x):
         """
@@ -89,7 +94,7 @@ class GroupThink(pl.LightningModule):
             p_list.append(p)
             halting_step_list.append(halting_step)
 
-        # stack the lists of tensors into single tensor of shape (ensemble_size, max_steps, batch_size)
+        # stack each list into single tensor (ensemble_size, max_steps, batch_size)
         y_ensemble = torch.stack(y_list, dim=0)
         p_ensemble = torch.stack(p_list, dim=0)
         halting_step_ensemble = torch.stack(halting_step_list, dim=0)
@@ -105,6 +110,11 @@ class GroupThink(pl.LightningModule):
         x, y_true = batch
         batch_size = x.shape[0]
         y_true = y_true.double()
+        if batch_idx == 0 and self.current_epoch == 0:
+            # we don't know the batch size upon initialization
+            self.std_err_halted = self.std_err_halted.expand(batch_size, 1).detach()
+        # compute lambda_p (batch_size,) with uncertainty from previous batch
+        lambda_p = self.lambda_p_mlp(self.std_err_halted).squeeze()
 
         # accuracy at the halting step for each model
         accuracies = torch.zeros(self.ensemble_size, batch_size, requires_grad=False)
@@ -112,9 +122,8 @@ class GroupThink(pl.LightningModule):
         # loss for each model
         losses_rec = torch.zeros(self.ensemble_size, requires_grad=False)
         losses_reg = torch.zeros(self.ensemble_size, requires_grad=False)
-        losses_overall = torch.zeros(self.ensemble_size, requires_grad=False)
 
-        # (sigmoid-scaled) y_pred at halting step for each model
+        # (sigmoid-scaled) y_pred at halting step for each model (batch_size, )
         y_pred_halted_ensemble = torch.zeros(self.ensemble_size, batch_size)
         # halting step of each model
         halting_step_ensemble = torch.zeros(self.ensemble_size, batch_size)
@@ -130,26 +139,34 @@ class GroupThink(pl.LightningModule):
             # apply sigmoid to normalize our output for valid std_err calculation
             with torch.no_grad():
                 y_pred_halted_scaled = torch.sigmoid(y_pred_halted).detach()
-            y_pred_halted_ensemble[i] = y_pred_halted_scaled
-            halting_step_ensemble[i] = halting_step
+                y_pred_halted_ensemble[i] = y_pred_halted_scaled
+                halting_step_ensemble[i] = halting_step
             # losses
             if phase == "train":
                 opt = self.optimizers()[i]
                 opt.zero_grad()
-            loss_rec, loss_reg, loss_overall = self._loss_step(p, y_pred, y_true)
+            loss_rec, loss_reg, loss_overall = self._loss_step(
+                p, y_pred, y_true, lambda_p
+            )
             # optimization per model
+            retain_graph = True if i < self.ensemble_size - 1 else False
             if phase == "train":
-                self.manual_backward(loss_overall)
+                # loss_overall.backward(retain_graph=retain_graph)
+                self.manual_backward(loss_overall, retain_graph=retain_graph)
                 opt.step()
-            losses_rec[i] = loss_rec
-            losses_reg[i] = loss_reg
-            losses_overall[i] = loss_overall
+            losses_rec[i] = loss_rec.detach()
+            losses_reg[i] = loss_reg.detach()
+
+        losses_overall = losses_rec + losses_reg
 
         # get mean accuracy
         accuracy_halted_step = torch.mean(accuracies, dim=0)
         # get std err of (sigmoid-scaled) prediction
-        std_dev_halted = torch.std(y_pred_halted_ensemble, dim=0)
-        std_err_halted = std_dev_halted / torch.sqrt(torch.Tensor([self.ensemble_size]))
+        std_dev_halted = torch.std(y_pred_halted_ensemble, dim=0).detach()
+        # (batch_size, 1)
+        self.std_err_halted = (
+            std_dev_halted / torch.sqrt(torch.Tensor([self.ensemble_size]))
+        )[:, None].detach()
 
         # collating all results
         results = {
@@ -159,7 +176,8 @@ class GroupThink(pl.LightningModule):
             "loss_rec": losses_rec.mean(dim=0),
             "loss_reg": losses_reg.mean(dim=0),
             "loss": losses_overall.mean(dim=0),
-            "std_err": std_err_halted.mean(),
+            "std_err": self.std_err_halted.mean(),
+            "lambda_p": lambda_p.detach().mean(),
         }
         # logging; accuracy_per_model logged in _shared_epoch_end
         self.log_dict(
@@ -186,18 +204,12 @@ class GroupThink(pl.LightningModule):
         )
         return accuracy_halted_step
 
-    def _loss_step(self, p, y_pred_batch, y_true_batch):
+    def _loss_step(self, p, y_pred_batch, y_true_batch, lambda_p):
         """computes the loss for a given batch"""
         # reconstruction loss
-        loss_rec = self.loss_rec_inst(
-            p,
-            y_pred_batch,
-            y_true_batch,
-        )
+        loss_rec = self.loss_rec_inst(p, y_pred_batch, y_true_batch)
         # regularization loss
-        loss_reg = self.loss_reg_inst(
-            p,
-        )
+        loss_reg = self.loss_reg_inst(p, lambda_p)
         # overall loss
         loss_overall = loss_rec + self.beta * loss_reg
         return loss_rec, loss_reg, loss_overall
@@ -223,7 +235,8 @@ class GroupThink(pl.LightningModule):
     def configure_optimizers(self):
         optimizers = []
         for model in self.ensemble:
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.0003)
+            # https://discuss.pytorch.org/t/adam-half-precision-nans/1765
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, eps=1e-4)
             optimizers.append(optimizer)
         return optimizers
 

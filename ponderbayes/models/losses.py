@@ -95,3 +95,54 @@ class RegularizationLoss(nn.Module):
         p_g_batch = self.p_g[None, :steps].expand_as(p)  # (batch_size, max_steps)
 
         return self.kl_div(p.log(), p_g_batch)
+
+
+class DynamicRegularizationLoss(nn.Module):
+    """
+    Enforce halting distribution to resemble
+    a dynamically changing geometric distribution.
+
+    Parameters
+    ----------
+    max_steps : int
+        Maximum number of pondering steps.
+    """
+
+    def __init__(self, max_steps=20):
+        super().__init__()
+
+        self.kl_div = nn.KLDivLoss(reduction="batchmean")
+        self.max_steps = max_steps
+
+    def forward(self, p, lambda_p):
+        """Compute loss.
+
+        Parameters
+        ----------
+        p : torch.Tensor
+            Probability of halting of shape `(steps, batch_size)`.
+        lambda_p : torch.Tensor
+            Parameter determining the dynamic geometric distribution.
+            of shape `(batch_size,)`.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Scalar representing the regularization loss.
+        """
+        steps, batch_size = p.shape
+
+        # p_g = torch.zeros((self.max_steps, batch_size))
+        p_g = []
+        not_halted = torch.ones(batch_size)
+
+        for k in range(self.max_steps):
+            p_g.append(not_halted * lambda_p)
+            not_halted = not_halted * (1 - lambda_p)
+
+        p_g = torch.stack(p_g, dim=0)  # (max_steps, batch_size)
+
+        p = p.transpose(0, 1)  # (batch_size, max_steps)
+        p_g = p_g.transpose(0, 1)  # (batch_size, max_steps)
+
+        return self.kl_div(p.log(), p_g)
