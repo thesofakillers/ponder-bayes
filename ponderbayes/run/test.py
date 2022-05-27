@@ -6,7 +6,7 @@ import re
 import ponderbayes.models as models
 import ponderbayes.data.datamodules as datamodules
 
-CHECKPOINT_REGEX = r".*\/(.+?)_(.+?)_([0-9]+)\/.*?_([0-9]+).+"
+CHECKPOINT_REGEX = r".*\/(.+)_(.+?)_([0-9]+)\/.*?_([0-9]+).+"
 
 
 def get_params(checkpoint_dir):
