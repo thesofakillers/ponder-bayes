@@ -25,6 +25,10 @@ class GroupThink(pl.LightningModule):
     allow_halting : bool
         If True, then the forward pass is allowed to halt before
         reaching the maximum steps.
+    beta : float
+        Hyperparameter governing the regularization loss
+    lambda_p : float
+        Hyperparameter governing the probability of halting
     """
 
     def __init__(
