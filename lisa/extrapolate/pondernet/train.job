@@ -19,7 +19,7 @@ source activate ponderbayes
 SEEDS_FILE=./lisa/seeds.txt
 
 # sleep some time dictate by array id to avoid simultaneous runs
-sleep $((SLURM_ARRAY_TASK_ID*10))
+sleep $((SLURM_ARRAY_TASK_ID * 10))
 
 # comment out the final line if you only care about seed 42
 srun python -u ponderbayes/run/train.py --model pondernet \
@@ -29,5 +29,5 @@ srun python -u ponderbayes/run/train.py --model pondernet \
   --lambda-p 0.2 \
   --beta 0.01 --batch-size 128 \
   --num-workers 3 \
-  --n-iter 80000
-$(head -$SLURM_ARRAY_TASK_ID $SEEDS_FILE | tail -1)
+  --n-iter 80000 \
+  $(head -$SLURM_ARRAY_TASK_ID $SEEDS_FILE | tail -1)
