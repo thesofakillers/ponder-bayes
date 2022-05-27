@@ -34,7 +34,7 @@ class MNIST_DataModule(LightningDataModule):
 
     def __init__(
         self,
-        data_dir="./data/raw/"
+        data_dir="./data/raw/mnist",
         train_transform=None,
         test_transform=None,
         batch_size=256,
