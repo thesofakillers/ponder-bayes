@@ -7,7 +7,7 @@ TEST_SCRIPT="./ponderbayes/run/test.py"
 
 if [ $# -ne 1 ]; then
     echo "Please specify the model to collect the checkpoints for!"
-    echo "Example: bash get_checkpoints.sh pondernet"
+    echo "Example: bash test.sh pondernet"
     exit 1
 fi
 
