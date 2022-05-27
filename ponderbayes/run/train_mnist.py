@@ -150,12 +150,17 @@ if __name__ == "__main__":
         val_check_interval=args.val_check_interval,
     )
 
-    train_transform, test_transform = datamodules.get_transforms()
-    mnist_datamodule = datamodules.MNIST_DataModule(
-        batch_size=args.batch_size,
-        train_transform=train_transform,
-        test_transform=test_transform,
-    )
+    if args.mode == "interpolation":
+        mnist_datamodule = datamodules.MNIST_DataModule(
+            batch_size=args.batch_size
+        )
+    else:
+        train_transform, test_transform = datamodules.get_transforms()
+        mnist_datamodule = datamodules.MNIST_DataModule(
+            batch_size=args.batch_size,
+            train_transform=train_transform,
+            test_transform=test_transform,
+        )
 
     # train
     trainer.fit(model, datamodule=mnist_datamodule)
