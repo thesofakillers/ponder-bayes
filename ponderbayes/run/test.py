@@ -83,7 +83,7 @@ if __name__ == "__main__":
     elif hparams["name"] == "groupthink":
         model_class = models.groupthink.GroupThink
     elif hparams["name"] == "pondernet_mnist":
-        model_class = models.pondernet.PonderNetMNIST
+        model_class = models.pondernet_mnist.PonderNetMNIST
     else:
         raise ValueError("Invalid `model` name in checkpoint path")
 
@@ -115,14 +115,14 @@ if __name__ == "__main__":
         )
     elif hparams["name"] == "pondernet_mnist":
         if hparams["mode"] == "interpolation":
-            mnist_datamodule = datamodules.MNIST_DataModule(batch_size=args.batch_size)
+            datamodule = datamodules.MNIST_DataModule(batch_size=args.batch_size)
         else:
             train_transform, test_transform = datamodules.get_transforms()
-            mnist_datamodule = datamodules.MNIST_DataModule(
+            datamodule = datamodules.MNIST_DataModule(
                 batch_size=args.batch_size,
                 train_transform=train_transform,
                 test_transform=test_transform,
             )
 
     # test model, load directly here
-    results = trainer.test(model=model, datamodule=parity_datamodule)
+    results = trainer.test(model=model, datamodule=datamodule)
