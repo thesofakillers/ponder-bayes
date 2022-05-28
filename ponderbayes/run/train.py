@@ -23,11 +23,7 @@ if __name__ == "__main__":
         type=str,
         default="pondernet",
         help="What model variant to use",
-<<<<<<< HEAD
-        choices=["pondernet", "groupthink", "RGT", "lambdaGT"],
-=======
-        choices=["pondernet", "groupthink", "RGT", "aRGT"],
->>>>>>> annealing
+        choices=["pondernet", "groupthink", "RGT", "lambdaGT", "aRGT"],
     )
     parser.add_argument(
         "-c",
