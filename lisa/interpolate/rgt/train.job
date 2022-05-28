@@ -28,5 +28,5 @@ srun python -u ponderbayes/run/train.py --model RGT \
   --n-hidden 128 \
   --beta 0.01 --batch-size 128 \
   --num-workers 3 \
-  --n-iter 400000 \
+  --n-iter 80000 \
   $(head -$SLURM_ARRAY_TASK_ID $SEEDS_FILE | tail -1)

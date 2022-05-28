@@ -29,5 +29,5 @@ srun python -u ponderbayes/run/train.py --model groupthink \
   --lambda-p 0.2 \
   --beta 0.01 --batch-size 128 \
   --num-workers 3 \
-  --n-iter 400000 \
+  --n-iter 80000 \
   $(head -$SLURM_ARRAY_TASK_ID $SEEDS_FILE | tail -1)
