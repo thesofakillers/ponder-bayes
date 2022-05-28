@@ -23,7 +23,7 @@ if __name__ == "__main__":
         type=str,
         default="pondernet",
         help="What model variant to use",
-        choices=["pondernet", "groupthink"],
+        choices=["pondernet", "groupthink", "RGT"],
     )
     parser.add_argument(
         "-c",
@@ -120,24 +120,28 @@ if __name__ == "__main__":
     pl.seed_everything(args.seed)
 
     # model instantiation
+    model_kwargs = {
+        "n_elems": args.n_elems,
+        "n_hidden": args.n_hidden,
+        "max_steps": args.max_steps,
+        "allow_halting": False,
+        "beta": args.beta,
+        "lambda_p": args.lambda_p,
+    }
     if args.model == "pondernet":
         model_class = models.pondernet.PonderNet
     elif args.model == "groupthink":
         model_class = models.groupthink.GroupThink
+    elif args.model == "RGT":
+        model_class = models.RGT.RationalGroupThink
+        model_kwargs.pop("lambda_p")
     else:
         raise ValueError("Invalid `model` arg passed")
     if args.checkpoint:
         print(f"Loading from checkpoint: {args.checkpoint}")
         model = model_class.load_from_checkpoint(args.checkpoint)
     else:
-        model = model_class(
-            n_elems=args.n_elems,
-            n_hidden=args.n_hidden,
-            max_steps=args.max_steps,
-            allow_halting=False,
-            beta=args.beta,
-            lambda_p=args.lambda_p,
-        )
+        model = model_class(**model_kwargs)
 
     # trainer config and instantiation
     cb_config = {"monitor": "val/accuracy_halted_step", "mode": "max"}
@@ -159,12 +163,13 @@ if __name__ == "__main__":
         enable_progress_bar=args.progress_bar,
         max_steps=(
             args.n_iter * args.ensemble_size
-            if args.model == "groupthink"
+            if args.model in {"groupthink", "RGT"}
             else args.n_iter
         ),
         callbacks=callbacks,
         logger=logger,
-        gradient_clip_val=None if args.model == "groupthink" else 1,
+        # handled by manual optization for models other than pondernet
+        gradient_clip_val=None if args.model in {"groupthink", "RGT"} else 1,
         val_check_interval=args.val_check_interval,
     )
 
