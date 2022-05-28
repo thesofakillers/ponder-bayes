@@ -1,5 +1,6 @@
 from . import metrics
 
+
 def tensor_at_halting_step(tensor, halting_step):
     """
     Indexes a step-wise batched metric by a halting step

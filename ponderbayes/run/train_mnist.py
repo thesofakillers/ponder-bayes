@@ -151,9 +151,7 @@ if __name__ == "__main__":
     )
 
     if args.mode == "interpolation":
-        mnist_datamodule = datamodules.MNIST_DataModule(
-            batch_size=args.batch_size
-        )
+        mnist_datamodule = datamodules.MNIST_DataModule(batch_size=args.batch_size)
     else:
         train_transform, test_transform = datamodules.get_transforms()
         mnist_datamodule = datamodules.MNIST_DataModule(

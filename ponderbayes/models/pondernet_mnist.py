@@ -258,13 +258,15 @@ class PonderNetMNIST(pl.LightningModule):
     def _shared_epoch_end(self, outputs, phase):
         """Accumulates and logs per-step metrics at the end of the epoch"""
         if phase == "testTT" and isinstance(outputs[0], list):
-            
+
             for dataset_idx, dataset in enumerate(outputs):
                 accuracy_all_steps = torch.stack(
-                [output["accuracy_all_steps"] for output in dataset ]
+                    [output["accuracy_all_steps"] for output in dataset]
                 ).mean(dim=0)
-                p = torch.stack([output["p"]  for output in dataset]).mean(dim=0)
-                for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
+                p = torch.stack([output["p"] for output in dataset]).mean(dim=0)
+                for i, (accuracy, step_p) in enumerate(
+                    zip(accuracy_all_steps, p), start=1
+                ):
                     self.log(f"{phase}/{dataset_idx}/step_accuracy/{i}", accuracy)
                     self.log(f"{phase}/{dataset_idx}/step_p/{i}", step_p)
         else:
