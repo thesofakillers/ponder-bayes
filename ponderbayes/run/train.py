@@ -168,7 +168,7 @@ if __name__ == "__main__":
         enable_progress_bar=args.progress_bar,
         max_steps=(
             args.n_iter * args.ensemble_size
-            if args.model in {"groupthink", "RGT"}
+            if args.model in {"groupthink", "RGT", "lambdaGT", "aRGT"}
             else args.n_iter
         ),
         callbacks=callbacks,
