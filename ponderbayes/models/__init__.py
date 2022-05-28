@@ -4,3 +4,4 @@ from . import losses
 from . import groupthink
 from . import RGT
 from . import lagt
+from . import aRGT
