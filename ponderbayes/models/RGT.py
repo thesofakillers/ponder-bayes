@@ -112,7 +112,9 @@ class RationalGroupThink(pl.LightningModule):
         y_true = y_true.double()
         if batch_idx == 0 and self.current_epoch == 0:
             # we don't know the batch size upon initialization
-            self.std_err_halted = self.std_err_halted.expand(batch_size, 1).detach()
+            self.std_err_halted = (
+                self.std_err_halted.expand(batch_size, 1).detach().to(self.device)
+            )
         # compute lambda_p (batch_size,) with uncertainty from previous batch
         lambda_p = self.lambda_p_mlp(self.std_err_halted).squeeze()
 
@@ -165,8 +167,10 @@ class RationalGroupThink(pl.LightningModule):
         std_dev_halted = torch.std(y_pred_halted_ensemble, dim=0).detach()
         # (batch_size, 1)
         self.std_err_halted = (
-            std_dev_halted / torch.sqrt(torch.Tensor([self.ensemble_size]))
-        )[:, None].detach()
+            (std_dev_halted / torch.sqrt(torch.Tensor([self.ensemble_size])))[:, None]
+            .detach()
+            .to(self.device)
+        )
 
         # collating all results
         results = {
@@ -176,7 +180,7 @@ class RationalGroupThink(pl.LightningModule):
             "loss_rec": losses_rec.mean(dim=0),
             "loss_reg": losses_reg.mean(dim=0),
             "loss": losses_overall.mean(dim=0),
-            "std_err": self.std_err_halted.mean(),
+            "std_err": self.std_err_halted.to("cpu").mean(),
             "lambda_p": lambda_p.detach().mean(),
         }
         # logging; accuracy_per_model logged in _shared_epoch_end

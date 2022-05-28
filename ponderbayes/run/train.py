@@ -158,7 +158,7 @@ if __name__ == "__main__":
         stop_cb = pl.callbacks.EarlyStopping(**cb_config)
         callbacks.append(stop_cb)
     trainer = pl.Trainer(
-        devices="auto",
+        devices=1,
         accelerator="auto",
         enable_progress_bar=args.progress_bar,
         max_steps=(

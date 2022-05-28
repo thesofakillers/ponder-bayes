@@ -134,7 +134,7 @@ class DynamicRegularizationLoss(nn.Module):
 
         # p_g = torch.zeros((self.max_steps, batch_size))
         p_g = []
-        not_halted = torch.ones(batch_size)
+        not_halted = torch.ones(batch_size).to(lambda_p.device)
 
         for k in range(self.max_steps):
             p_g.append(not_halted * lambda_p)
