@@ -123,37 +123,14 @@ class MNIST_DataModule(LightningDataModule):
 
 def get_transforms():
     # define transformations
-    transform_22 = transforms.Compose(
+    train_transform = None
+    test_transform = transforms.Compose(
         [
-            transforms.RandomRotation(degrees=22.5),
+            transforms.RandomRotation(degrees=112),
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,)),
         ]
     )
-    transform_45 = transforms.Compose(
-        [
-            transforms.RandomRotation(degrees=45),
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,)),
-        ]
-    )
-    transform_67 = transforms.Compose(
-        [
-            transforms.RandomRotation(degrees=67.5),
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,)),
-        ]
-    )
-    transform_90 = transforms.Compose(
-        [
-            transforms.RandomRotation(degrees=90),
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,)),
-        ]
-    )
-
-    train_transform = transform_22
-    test_transform = [transform_22, transform_45, transform_67, transform_90]
 
     return train_transform, test_transform
 
