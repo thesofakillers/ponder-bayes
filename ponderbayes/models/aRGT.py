@@ -39,7 +39,6 @@ class RationalGroupThink(pl.LightningModule):
         max_steps=20,
         allow_halting=False,
         beta=0.01,
-        anneal_beta=False,
     ):
         super().__init__()
 
@@ -48,7 +47,6 @@ class RationalGroupThink(pl.LightningModule):
         self.max_steps = max_steps
         self.allow_halting = allow_halting
         self.beta = beta
-        self.anneal_beta = anneal_beta
 
         self.ensemble_size = ensemble_size
         self.ensemble = nn.ModuleList(
@@ -199,10 +197,7 @@ class RationalGroupThink(pl.LightningModule):
         """
         Computes total loss
         """
-        if self.anneal_beta:
-            return rec_loss + self.beta_annealer() * reg_loss
-        else:
-            return rec_loss + self.beta * reg_loss
+        return rec_loss + self.beta_annealer() * reg_loss
 
     def training_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, "train")
