@@ -26,6 +26,7 @@ srun python -u ponderbayes/run/train.py --model lambdaGT \
   --mode extrapolation \
   --n-elems 24 \
   --n-hidden 128 \
+  --lambda-p 0.2 \
   --beta 0.01 --batch-size 128 \
   --num-workers 3 \
   --n-iter 80000 \
