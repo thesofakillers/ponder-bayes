@@ -205,7 +205,7 @@ class PonderNetMNIST(pl.LightningModule):
         loss_overall = loss_rec + self.beta * loss_reg
         return loss_rec, loss_reg, loss_overall
 
-    def _shared_step(self, batch, batch_idx, phase):
+    def _shared_step(self, batch, batch_idx, dataset_idx, phase):
         """runs forward, computes accuracy and loss and logs"""
         # (batch_size, n_elems), (batch_size,)
         x_batch, y_true_batch = batch
@@ -233,7 +233,7 @@ class PonderNetMNIST(pl.LightningModule):
         # logging; p and accuracy_all_steps logged in _shared_epoch_end
         self.log_dict(
             {
-                f"{phase}/{k}": results[k]
+                f"{phase}/{dataset_idx}/{k}": results[k]
                 for k in [
                     "loss_rec",
                     "loss_reg",
@@ -252,18 +252,29 @@ class PonderNetMNIST(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, "val")
 
-    def test_step(self, batch, batch_idx):
-        return self._shared_step(batch, batch_idx, "test")
+    def test_step(self, batch, batch_idx, dataset_idx=0):
+        return self._shared_step(batch, batch_idx, dataset_idx, "test")
 
     def _shared_epoch_end(self, outputs, phase):
         """Accumulates and logs per-step metrics at the end of the epoch"""
-        accuracy_all_steps = torch.stack(
-            [output["accuracy_all_steps"] for output in outputs]
-        ).mean(dim=0)
-        p = torch.stack([output["p"] for output in outputs]).mean(dim=0)
-        for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
-            self.log(f"{phase}/step_accuracy/{i}", accuracy)
-            self.log(f"{phase}/step_p/{i}", step_p)
+        if phase == "test" and isinstance(outputs[0], list):
+            
+            for dataset_idx, dataset in enumerate(outputs):
+                accuracy_all_steps = torch.stack(
+                [output["accuracy_all_steps"] for output in dataset ]
+                ).mean(dim=0)
+                p = torch.stack([output["p"]  for output in dataset]).mean(dim=0)
+                for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
+                    self.log(f"{phase}/{dataset_idx}/step_accuracy/{i}", accuracy)
+                    self.log(f"{phase}/{dataset_idx}/step_p/{i}", step_p)
+        else:
+            accuracy_all_steps = torch.stack(
+                [output["accuracy_all_steps"] for output in outputs]
+            ).mean(dim=0)
+            p = torch.stack([output["p"] for output in outputs]).mean(dim=0)
+            for i, (accuracy, step_p) in enumerate(zip(accuracy_all_steps, p), start=1):
+                self.log(f"{phase}/step_accuracy/{i}", accuracy)
+                self.log(f"{phase}/step_p/{i}", step_p)
 
     def training_epoch_end(self, outputs):
         self._shared_epoch_end(outputs, "train")
