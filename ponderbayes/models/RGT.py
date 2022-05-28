@@ -236,7 +236,7 @@ class RationalGroupThink(pl.LightningModule):
         optimizers = []
         for model in self.ensemble:
             # https://discuss.pytorch.org/t/adam-half-precision-nans/1765
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, eps=1e-4)
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, eps=1e-6)
             optimizers.append(optimizer)
         return optimizers
 
