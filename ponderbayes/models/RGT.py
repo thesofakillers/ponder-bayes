@@ -157,7 +157,7 @@ class RationalGroupThink(pl.LightningModule):
             losses_rec[i] = loss_rec.detach()
             losses_reg[i] = loss_reg.detach()
 
-        losses_overall = losses_rec + losses_reg
+        losses_overall = losses_rec + self.beta * losses_reg
 
         # get mean accuracy
         accuracy_halted_step = torch.mean(accuracies, dim=0)
