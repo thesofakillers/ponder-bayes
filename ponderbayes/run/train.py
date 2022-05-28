@@ -175,7 +175,7 @@ if __name__ == "__main__":
         logger=logger,
         # handled by manual optization for models other than pondernet
         gradient_clip_val=None
-        if args.model in {"groupthink", "RGT", "lambdaGT"}
+        if args.model in {"groupthink", "RGT", "lambdaGT", "aRGT"}
         else 1,
         val_check_interval=args.val_check_interval,
     )
