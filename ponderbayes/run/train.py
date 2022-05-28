@@ -23,7 +23,7 @@ if __name__ == "__main__":
         type=str,
         default="pondernet",
         help="What model variant to use",
-        choices=["pondernet", "groupthink", "RGT"],
+        choices=["pondernet", "groupthink", "RGT", "aRGT"],
     )
     parser.add_argument(
         "-c",
@@ -134,6 +134,9 @@ if __name__ == "__main__":
         model_class = models.groupthink.GroupThink
     elif args.model == "RGT":
         model_class = models.RGT.RationalGroupThink
+        model_kwargs.pop("lambda_p")
+    elif args.model == "aRGT":
+        model_class = models.aRGT.RationalGroupThink
         model_kwargs.pop("lambda_p")
     else:
         raise ValueError("Invalid `model` arg passed")
