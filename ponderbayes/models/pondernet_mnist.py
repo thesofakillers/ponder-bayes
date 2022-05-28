@@ -205,7 +205,7 @@ class PonderNetMNIST(pl.LightningModule):
         loss_overall = loss_rec + self.beta * loss_reg
         return loss_rec, loss_reg, loss_overall
 
-    def _shared_step(self, batch, batch_idx, dataset_idx, phase):
+    def _shared_step(self, batch, batch_idx, phase):
         """runs forward, computes accuracy and loss and logs"""
         # (batch_size, n_elems), (batch_size,)
         x_batch, y_true_batch = batch
@@ -233,7 +233,7 @@ class PonderNetMNIST(pl.LightningModule):
         # logging; p and accuracy_all_steps logged in _shared_epoch_end
         self.log_dict(
             {
-                f"{phase}/{dataset_idx}/{k}": results[k]
+                f"{phase}/{k}": results[k]
                 for k in [
                     "loss_rec",
                     "loss_reg",
@@ -249,15 +249,15 @@ class PonderNetMNIST(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx, "train")
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx, dataset_idx=0):
         return self._shared_step(batch, batch_idx, "val")
 
     def test_step(self, batch, batch_idx, dataset_idx=0):
-        return self._shared_step(batch, batch_idx, dataset_idx, "test")
+        return self._shared_step(batch, batch_idx, "test")
 
     def _shared_epoch_end(self, outputs, phase):
         """Accumulates and logs per-step metrics at the end of the epoch"""
-        if phase == "test" and isinstance(outputs[0], list):
+        if phase == "testTT" and isinstance(outputs[0], list):
             
             for dataset_idx, dataset in enumerate(outputs):
                 accuracy_all_steps = torch.stack(
