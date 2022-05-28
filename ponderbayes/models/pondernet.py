@@ -31,11 +31,7 @@ class PonderNetModule(nn.Module):
     """
 
     def __init__(
-        self,
-        n_elems,
-        n_hidden=64,
-        max_steps=20,
-        allow_halting=False,
+        self, n_elems, n_hidden=64, max_steps=20, allow_halting=False, feed_lambda=False
     ):
         super().__init__()
         self.n_hidden = n_hidden
@@ -44,9 +40,11 @@ class PonderNetModule(nn.Module):
 
         self.cell = nn.GRUCell(n_elems, n_hidden)
         self.output_layer = nn.Linear(n_hidden, 1)
-        self.lambda_layer = nn.Linear(n_hidden, 1)
+        self.lambda_layer = (
+            nn.Linear(n_hidden, 1) if not feed_lambda else nn.Linear(n_hidden + 1, 1)
+        )
 
-    def forward(self, x):
+    def forward(self, x, err=None):
         """
         Parameters
         ----------
@@ -92,7 +90,14 @@ class PonderNetModule(nn.Module):
             if n == self.max_steps:
                 lambda_n = x.new_ones(batch_size)  # (batch_size,)
             else:
-                lambda_n = torch.sigmoid(self.lambda_layer(h))[:, 0]  # (batch_size,)
+                if type(err) == torch.Tensor:
+                    err_at_n = err[:, n - 1]
+                    input = torch.cat([h, err_at_n.unsqueeze(1)], dim=1)
+                    lambda_n = torch.sigmoid(self.lambda_layer(input))[:, 0]
+                else:
+                    lambda_n = torch.sigmoid(self.lambda_layer(h))[
+                        :, 0
+                    ]  # (batch_size,)
 
             # Store releavant outputs
             y_list.append(self.output_layer(h).squeeze())  # (batch_size,)

@@ -23,7 +23,7 @@ if __name__ == "__main__":
         type=str,
         default="pondernet",
         help="What model variant to use",
-        choices=["pondernet", "groupthink", "RGT"],
+        choices=["pondernet", "groupthink", "RGT", "lambdaGT"],
     )
     parser.add_argument(
         "-c",
@@ -135,6 +135,8 @@ if __name__ == "__main__":
     elif args.model == "RGT":
         model_class = models.RGT.RationalGroupThink
         model_kwargs.pop("lambda_p")
+    elif args.model == "lambdaGT":
+        model_class = models.lagt.LambdaGroupThink
     else:
         raise ValueError("Invalid `model` arg passed")
     if args.checkpoint:
@@ -169,7 +171,9 @@ if __name__ == "__main__":
         callbacks=callbacks,
         logger=logger,
         # handled by manual optization for models other than pondernet
-        gradient_clip_val=None if args.model in {"groupthink", "RGT"} else 1,
+        gradient_clip_val=None
+        if args.model in {"groupthink", "RGT", "lambdaGT"}
+        else 1,
         val_check_interval=args.val_check_interval,
     )
 

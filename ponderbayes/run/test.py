@@ -103,17 +103,7 @@ if __name__ == "__main__":
     )
 
     # init data
-    if hparams["name"] == "pondernet" or hparams["name"] == "groupthink":
-        # pass None to n_train_samples because not training
-        parity_datamodule = datamodules.ParityDataModule(
-            n_train_samples=None,
-            n_eval_samples=args.n_test_samples,
-            n_elems=hparams["n_elems"],
-            mode=hparams["mode"],
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-        )
-    elif hparams["name"] == "pondernet_mnist":
+    if hparams["name"] == "pondernet_mnist":
         if hparams["mode"] == "interpolation":
             datamodule = datamodules.MNIST_DataModule(batch_size=args.batch_size)
         else:
@@ -123,6 +113,16 @@ if __name__ == "__main__":
                 train_transform=train_transform,
                 test_transform=test_transform,
             )
+    else:
+        # pass None to n_train_samples because not training
+        datamodule = datamodules.ParityDataModule(
+            n_train_samples=None,
+            n_eval_samples=args.n_test_samples,
+            n_elems=hparams["n_elems"],
+            mode=hparams["mode"],
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+        )
 
     # test model, load directly here
     results = trainer.test(model=model, datamodule=datamodule)
