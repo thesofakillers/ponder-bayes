@@ -84,6 +84,10 @@ if __name__ == "__main__":
         model_class = models.groupthink.GroupThink
     elif hparams["name"] == "pondernet_mnist":
         model_class = models.pondernet_mnist.PonderNetMNIST
+    elif hparams["name"] == "aRGT":
+        model_class = models.aRGT.RationalGroupThink
+    elif hparams["name"] == "lambdaGT":
+        model_class = models.lagt.LambdaGroupThink
     else:
         raise ValueError("Invalid `model` name in checkpoint path")
 
