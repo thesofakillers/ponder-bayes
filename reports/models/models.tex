@@ -1,0 +1,71 @@
+
+\documentclass{article}
+
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usetikzlibrary{positioning}
+\usetikzlibrary{arrows.meta}
+
+\usepackage[graphics,tightpage,active]{preview}
+\PreviewEnvironment{tikzpicture}
+\newlength{\imagewidth}
+\newlength{\imagescale}
+
+\begin{document}
+
+\begin{tikzpicture}[scale = 0.45,
+		roundnode/.style={circle, draw=green!60, fill=green!5, very thick, minimum size=7mm},
+		squarednode/.style={rectangle, draw=red!60, fill=red!5, very thick, minimum size=5mm},
+		operation/.style={rectangle, rounded corners=1ex, draw=blue!60, fill=blue!5, very thick, minimum size=5mm},
+	]
+	% \draw[help lines,step=20pt,gray!20] (-20,-4) grid (20,4);
+	\draw[gray, very thick, fill=white!60] (-398pt,-117pt) rectangle (-45pt,130pt);
+	\begin{scope}[transform canvas={yshift=+3pt, xshift = +3pt}]
+		\draw[gray, very thick, fill=white!60] (-398pt,-117pt) rectangle (-45pt,130pt);
+	\end{scope}
+	\begin{scope}[transform canvas={yshift=+6pt, xshift = +6pt}]
+		\draw[gray, very thick, fill=white!60] (-398pt,-117pt) rectangle (-45pt,130pt);
+	\end{scope}
+	\draw[black, very thick] (265pt,-100pt) rectangle (440pt,0pt);
+	%Nodes
+	\node at (-90pt, 130pt) {PonderNet};
+	\node at (-220pt, 90pt) {$n$ steps};
+	\node at (305pt, -15pt) {RGT};
+	\matrix[column sep=12pt, row sep=20pt] (m) {
+		\node[roundnode]        (x)    {$\mathbf{x}$};                                                    &
+		\node[squarednode]      (gru)            {GRU};                                                            &
+		\node[roundnode]        (h)              {$\mathbf{h}_n$};                                          &
+		\node[squarednode]      (output)   {MLP};                                                                  &
+		\node[roundnode]        (y)     {$\mathbf{y}$};                                                   &
+		\node[operation]      (groupthink)   [text width=2.0cm, align=center]{GroupThink ($\mathbf{y}_1, ..., \mathbf{y}_m$)}; &                                                                                       &                                                                 \\
+		                                                                                                           & \node[operation]      (halt)  [text width=2.0cm, align=center] {Sample halting step}; &
+		\node[roundnode]        (lambda_n)      {$\lambda_n$};                                           &
+		\node[squarednode]      (lambda_layer)   {MLP};                                                            &
+		                                                                                                           & \node[operation]      (stderr)   {Standard Error};                                    &
+		                                                                                                           & \node[squarednode]      (prior)   {MLP};                                              & \node[roundnode]        (lambda_p)     {$\lambda_p$}; \\
+	};
+	%Lines
+	\draw[-Latex] (x.east) -- (gru.west);
+	\draw[-Latex] (gru.east) -- (h.west);
+	\draw[-Latex] (halt.north) -- (gru.south);
+	\draw [-Latex](h.north) -- ++(0, 20pt) -| (gru.north);
+	\draw[-Latex] (h) edge (lambda_layer);
+	\draw[-Latex] (lambda_layer.west) -- (lambda_n.east);
+	\draw[-Latex] (lambda_n.west) -- (halt.east);
+	\draw[-Latex] (h.east) -- (output.west);
+	\draw[-Latex] (output.east) -- (y.west);
+	\draw[-Latex] (y.east) -- (groupthink.west);
+	\begin{scope}[transform canvas={yshift=.5em}]
+		\draw[-Latex] (y.east) -- (groupthink.west);
+	\end{scope}
+	\begin{scope}[transform canvas={yshift=-.5em}]
+		\draw[-Latex] (y.east) -- (groupthink.west);
+	\end{scope}
+	\draw[-Latex] (groupthink.south) -- (stderr.north);
+	\draw[-Latex] (stderr.east) -- (prior.west);
+	\draw[-Latex] (prior.east) -- (lambda_p.west);
+	\draw[very thick, densely dashed, red, arrows = {-Latex}] (stderr.west) -- (lambda_layer.east);
+\end{tikzpicture}
+
+
+\end{document}
