@@ -27,6 +27,7 @@ jupyterlab = "^3.4.0"
 black = {extras = ["jupyter"], version = "^22.3.0"}
 flake8 = "^4.0.1"
 jupyterlab-code-formatter = "^1.4.11"
+nbdime = "^3.1.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
