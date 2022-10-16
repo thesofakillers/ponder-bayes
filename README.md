@@ -1,7 +1,8 @@
 # PonderBayes
 
 Official repository for the paper "PonderBayes: Rationally Pondering Neural
-Networks"
+Networks" (Not submitted to peer review, but available for a browse in this
+repository)
 
 ## Requirements and Setup
 
